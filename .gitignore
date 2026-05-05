@@ -1,0 +1,15 @@
+# Worktrees
+.worktrees/
+worktrees/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Session files
+*.md
+!README.md
