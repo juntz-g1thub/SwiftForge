@@ -6,4 +6,4 @@ mod provider;
 pub use agent::{Agent, AgentConfig, AgentRole};
 pub use tool::{Tool, ToolResult, ToolCall, ToolRegistry};
 pub use session::{Session, SessionConfig, Message};
-pub use provider::{Provider, ProviderConfig, ModelResponse};
+pub use provider::{Provider, ProviderConfig, ModelResponse, Usage};
