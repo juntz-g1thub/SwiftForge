@@ -1,0 +1,26 @@
+[package]
+name = "rust-agent-platform"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "rust_agent_platform"
+path = "src/lib.rs"
+
+[[bin]]
+name = "ragent"
+path = "src/main.rs"
+
+[dependencies]
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+async-trait.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rusqlite.workspace = true
+
+ratatui = "0.26"
+crossterm = "0.27"

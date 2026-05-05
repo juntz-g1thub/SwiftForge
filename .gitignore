@@ -13,3 +13,7 @@ Thumbs.db
 # Session files
 *.md
 !README.md
+
+# Rust build
+target/
+Cargo.lock
