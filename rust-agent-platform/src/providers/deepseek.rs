@@ -3,25 +3,24 @@ use crate::providers::LLMProvider;
 use crate::core::{ModelResponse, Usage, Message};
 use anyhow::{Result, Context};
 use tokio_stream::StreamExt;
-use futures::stream::Stream;
 
-pub struct OpenAIProvider {
+pub struct DeepSeekProvider {
     api_key: String,
     base_url: String,
     model: String,
 }
 
-impl OpenAIProvider {
-    pub fn new(api_key: String, base_url: Option<String>) -> Self {
+impl DeepSeekProvider {
+    pub fn new(api_key: String, base_url: Option<String>, model: Option<String>) -> Self {
         Self {
             api_key,
-            base_url: base_url.unwrap_or_else(|| "https://api.openai.com/v1".to_string()),
-            model: "gpt-4o".to_string(),
+            base_url: base_url.unwrap_or_else(|| "https://api.deepseek.com".to_string()),
+            model: model.unwrap_or_else(|| "deepseek-chat".to_string()),
         }
     }
 
     pub async fn list_models(&self) -> Result<Vec<String>> {
-        let url = format!("{}/models", self.base_url);
+        let url = format!("{}/v1/models", self.base_url);
         let client = reqwest::Client::new();
         let response = client
             .get(&url)
@@ -52,38 +51,61 @@ impl OpenAIProvider {
         F: FnMut(String) + Send + Sync,
     {
         let client = reqwest::Client::new();
+        let request_body = serde_json::json!({
+            "model": self.model,
+            "messages": messages.iter().map(|m| {
+                serde_json::json!({ "role": m.role, "content": m.content })
+            }).collect::<Vec<_>>(),
+            "stream": true,
+            "thinking": {
+                "type": "enabled"
+            },
+            "reasoning_effort": "high"
+        });
+
         let response = client
             .post(format!("{}/chat/completions", self.base_url))
             .header("Authorization", format!("Bearer {}", self.api_key))
             .header("Content-Type", "application/json")
-            .json(&serde_json::json!({
-                "model": self.model,
-                "messages": messages.iter().map(|m| {
-                    serde_json::json!({ "role": m.role, "content": m.content })
-                }).collect::<Vec<_>>(),
-                "stream": true
-            }))
+            .json(&request_body)
             .send()
             .await?;
 
         let mut stream = response.bytes_stream();
+        let mut is_thinking = false;
 
         while let Some(chunk_result) = stream.next().await {
             let chunk = chunk_result?;
             let text = String::from_utf8_lossy(&chunk);
 
-            // Parse SSE lines: each line is "data: {...}" or "data: [DONE]"
             for line in text.lines() {
                 let line = line.trim();
+                if line.is_empty() {
+                    continue;
+                }
                 if line.starts_with("data:") {
                     let data = line.trim_start_matches("data:").trim();
                     if data == "[DONE]" {
                         return Ok(());
                     }
-                    // Parse JSON and extract content delta
                     if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
+                        if let Some(reasoning) = json["choices"][0]["delta"]["reasoning_content"].as_str() {
+                            if !reasoning.is_empty() {
+                                if !is_thinking {
+                                    on_chunk("[thinking] ".to_string());
+                                    is_thinking = true;
+                                }
+                                on_chunk(reasoning.to_string());
+                            }
+                        }
                         if let Some(content) = json["choices"][0]["delta"]["content"].as_str() {
-                            on_chunk(content.to_string());
+                            if !content.is_empty() {
+                                if is_thinking {
+                                    on_chunk("\n\n".to_string());
+                                }
+                                is_thinking = false;
+                                on_chunk(content.to_string());
+                            }
                         }
                     }
                 }
@@ -95,18 +117,24 @@ impl OpenAIProvider {
 }
 
 #[async_trait]
-impl LLMProvider for OpenAIProvider {
+impl LLMProvider for DeepSeekProvider {
     async fn chat(&self, messages: Vec<Message>) -> Result<ModelResponse> {
         let client = reqwest::Client::new();
+        let request_body = serde_json::json!({
+            "model": self.model,
+            "messages": messages.iter().map(|m| {
+                serde_json::json!({ "role": m.role, "content": m.content })
+            }).collect::<Vec<_>>(),
+            "thinking": {
+                "type": "enabled"
+            },
+            "reasoning_effort": "high"
+        });
+
         let response = client
             .post(format!("{}/chat/completions", self.base_url))
             .header("Authorization", format!("Bearer {}", self.api_key))
-            .json(&serde_json::json!({
-                "model": self.model,
-                "messages": messages.iter().map(|m| {
-                    serde_json::json!({ "role": m.role, "content": m.content })
-                }).collect::<Vec<_>>()
-            }))
+            .json(&request_body)
             .send()
             .await?;
 
@@ -126,7 +154,7 @@ impl LLMProvider for OpenAIProvider {
     }
 
     fn provider_name(&self) -> &str {
-        "openai"
+        "deepseek"
     }
 
     async fn list_models(&self) -> Result<Vec<String>> {

@@ -3,48 +3,26 @@ use crate::providers::LLMProvider;
 use crate::core::{ModelResponse, Usage, Message};
 use anyhow::{Result, Context};
 use tokio_stream::StreamExt;
-use futures::stream::Stream;
 
-pub struct OpenAIProvider {
+pub struct CustomProvider {
+    name: String,
     api_key: String,
     base_url: String,
     model: String,
 }
 
-impl OpenAIProvider {
-    pub fn new(api_key: String, base_url: Option<String>) -> Self {
+impl CustomProvider {
+    pub fn new(name: String, api_key: String, base_url: String, model: String) -> Self {
         Self {
+            name,
             api_key,
-            base_url: base_url.unwrap_or_else(|| "https://api.openai.com/v1".to_string()),
-            model: "gpt-4o".to_string(),
+            base_url,
+            model,
         }
     }
 
     pub async fn list_models(&self) -> Result<Vec<String>> {
-        let url = format!("{}/models", self.base_url);
-        let client = reqwest::Client::new();
-        let response = client
-            .get(&url)
-            .header("Authorization", format!("Bearer {}", self.api_key))
-            .send()
-            .await?;
-
-        let status = response.status();
-        if !status.is_success() {
-            let body = response.text().await.unwrap_or_default();
-            anyhow::bail!("HTTP {}: {}", status, body);
-        }
-
-        let data: serde_json::Value = response.json().await?;
-        let models = data["data"]
-            .as_array()
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|m| m["id"].as_str().map(String::from))
-                    .collect()
-            })
-            .unwrap_or_default();
-        Ok(models)
+        Ok(vec![self.model.clone()])
     }
 
     pub async fn stream_chat<F>(&self, messages: Vec<Message>, mut on_chunk: F) -> Result<()>
@@ -72,7 +50,6 @@ impl OpenAIProvider {
             let chunk = chunk_result?;
             let text = String::from_utf8_lossy(&chunk);
 
-            // Parse SSE lines: each line is "data: {...}" or "data: [DONE]"
             for line in text.lines() {
                 let line = line.trim();
                 if line.starts_with("data:") {
@@ -80,7 +57,6 @@ impl OpenAIProvider {
                     if data == "[DONE]" {
                         return Ok(());
                     }
-                    // Parse JSON and extract content delta
                     if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
                         if let Some(content) = json["choices"][0]["delta"]["content"].as_str() {
                             on_chunk(content.to_string());
@@ -95,7 +71,7 @@ impl OpenAIProvider {
 }
 
 #[async_trait]
-impl LLMProvider for OpenAIProvider {
+impl LLMProvider for CustomProvider {
     async fn chat(&self, messages: Vec<Message>) -> Result<ModelResponse> {
         let client = reqwest::Client::new();
         let response = client
@@ -126,7 +102,7 @@ impl LLMProvider for OpenAIProvider {
     }
 
     fn provider_name(&self) -> &str {
-        "openai"
+        &self.name
     }
 
     async fn list_models(&self) -> Result<Vec<String>> {
