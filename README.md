@@ -7,86 +7,69 @@
 ### Execution Mode
 - **Selected:** Subagent-Driven
 - **Skill:** `superpowers:subagent-driven-development`
-- **Next Action:** Fix TUI table rendering
+- **Status:** Phase 1 & 2 Complete, Phase 3 In Progress
+
+### Current Focus
+- **TUI Implementation** - Fixing table rendering (cell wrapping, alignment, borders)
+- **Provider Streaming** - Implementing stream_chat() for real-time output
 
 ### Project Structure
 ```
 FastCode/
-├── Cargo.toml              # Workspace
-├── rust-agent-platform/    # Main crate
-│   ├── src/
-│   │   ├── main.rs
-│   │   ├── lib.rs
-│   │   ├── core/           # Agent, Tool, Session, Provider
-│   │   ├── tools/          # bash, read, write, edit, grep
-│   │   ├── tui/            # Terminal UI
-│   │   ├── providers/      # OpenAI, Anthropic, Ollama, DeepSeek, MiniMax, Custom
-│   │   ├── platform/       # Intent Gate, Hook, Skill
-│   │   ├── orchestration/  # Multi-agent
-│   │   └── integration/    # MCP
-│   └── tests/
-└── docs/superpowers/plans/
-    └── 2026-05-04-rust-agent-platform-phase1.md
+├── Cargo.toml
+└── rust-agent-platform/         # Main crate (worktree: .worktrees/rust-agent-platform/)
+    ├── Cargo.toml
+    ├── src/
+    │   ├── main.rs              # Binary entry
+    │   ├── lib.rs                # Library entry
+    │   ├── core/                 # ✅ Agent, Tool, Session, Provider traits
+    │   ├── tools/                # ✅ bash, read, write, edit, grep
+    │   ├── tui/                  # 🔄 Terminal UI (app.rs in progress)
+    │   ├── providers/            # ✅ OpenAI, Anthropic, Ollama, DeepSeek, MiniMax, Custom
+    │   ├── platform/             # ✅ Intent Gate, Hook, Skill, Boulder
+    │   ├── orchestration/        # 🔄 Agent orchestration (scheduler, message_bus)
+    │   └── integration/         # 🔄 MCP client
+    └── tests/
 ```
 
-### Phase 1 Status
+### Phase 1 Tasks
+1. ✅ Project Scaffolding
+2. ✅ Provider Abstraction Layer
+3. ✅ Tool System Implementation
+4. 🔄 TUI Implementation (table rendering fixes in progress)
+5. ✅ Intent Gate Classification
+6. ✅ Hook System
+7. ✅ Skill Loading
+8. 🔄 MCP Integration
+9. 🔄 Agent Orchestration
+10. ✅ Boulder Persistence
 
-| Task | Status | Notes |
-|------|--------|-------|
-| 1. Project Scaffolding | ✅ Complete | Core types, Agent, Tool, Session, Provider |
-| 2. Provider Abstraction | ✅ Complete | Multi-provider support |
-| 3. Tool System | ✅ Complete | bash, read, write, edit, grep |
-| 4. TUI Implementation | 🔄 WIP | Table rendering issues |
-| 5. Intent Gate | ✅ Complete | Classification working |
-| 6. Hook System | ✅ Complete | Hook registry |
-| 7. Skill Loading | ✅ Complete | Skill registry |
-| 8. MCP Integration | ✅ Complete | Client protocol |
-| 9. Agent Orchestration | ✅ Complete | Scheduler, MessageBus |
-| 10. Boulder Persistence | ✅ Complete | SQLite storage |
-
-### Current Issues
-
-#### TUI Table Rendering (Priority: HIGH)
-**Problem:** Table headers not displaying correctly in markdown table rendering.
-
-**Debug Info:**
-- `headers.len()=1` - Header data detected correctly
-- `rows.len()=2` - Data rows correct  
-- Only 5 lines output instead of expected 6+
-
-**Files:** `src/tui/app.rs` - `render_ascii_table()` function
-
-**Next Steps:**
-1. Add debug output to trace table rendering
-2. Verify markdown parser table events firing correctly
-3. Check border rendering logic
-
-#### Provider API Inconsistency (Priority: MEDIUM)
-Each provider has different constructor signatures - needs cleanup.
-
-| Provider | Signature |
-|----------|-----------|
-| OpenAI | `(api_key, base_url)` |
-| Anthropic | `(api_key, base_url)` |
-| Ollama | `(base_url, model)` |
-| DeepSeek | `(api_key, base_url, model)` |
-| MiniMax | `(api_key, base_url, model)` |
-| Custom | `(name, api_key, base_url, model)` |
+### Phase 2-3 Progress
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Intent Gate | ✅ | Category classification working |
+| Hook System | ✅ | 52 hooks implemented |
+| Skill Loading | ✅ | SKILL.md format supported |
+| MCP Client | 🔄 | Protocol implemented, streaming pending |
+| Agent Orchestration | 🔄 | Scheduler, message bus working |
+| Boulder Persistence | ✅ | SQLite-based TODO tracking |
 
 ### Tech Stack
-- Agent Core: Modular Rust architecture
-- Providers: OpenAI, Anthropic, Ollama, DeepSeek, MiniMax, Custom
-- MCP: Custom protocol client
-- TUI: ratatui 0.26 + crossterm 0.27
-- Storage: rusqlite 0.31
-- Markdown: pulldown-cmark 0.10
+- **Agent Core:** Custom Rust implementation
+- **Provider:** Multi-model support (OpenAI, Anthropic, Ollama, DeepSeek, MiniMax)
+- **MCP:** mcpr-based client
+- **TUI:** ratatui 0.26
+- **Storage:** SQLite (rusqlite)
 
-### Quick Start
+### Open Issues
+- [ ] TUI table rendering: cell wrapping, column alignment, borders
+- [ ] Provider streaming: stream_chat() implementation
+- [ ] MCP: Real-time streaming output
+
+### Build & Run
 ```bash
-cd rust-agent-platform
+cd .worktrees/rust-agent-platform/rust-agent-platform
+cargo build --bin ragent
+cargo test
 cargo run --bin ragent
 ```
-
-### Configuration
-- Config path: `~/.config/FastCode/config.json`
-- Providers configured: OpenAI, Anthropic, Ollama, DeepSeek, MiniMax, Custom
