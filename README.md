@@ -9,22 +9,33 @@
 - **Skill:** `superpowers:subagent-driven-development`
 - **Status:** Phase 1 & 2 Complete, Phase 3 In Progress
 
-### Current Focus
-- **TUI Implementation** - Fixing table rendering (cell wrapping, alignment, borders)
-- **Provider Streaming** - Implementing stream_chat() for real-time output
+### Current Worktree / Branch
+- **Development:** `feature/rust-agent-phase2` (`.worktrees/rust-agent-phase2/`)
+- **Previous Work:** `feature/rust-agent-platform` (`.worktrees/rust-agent-platform/`)
+
+### Phase 3 Goals (Current Development)
+
+**Primary Objectives:**
+1. **MCP Client** - Real HTTP communication with MCP servers
+2. **Agent Orchestration Integration** - Connect Agent with Scheduler + MessageBus
+3. **Provider-Agent Integration** - Agent can call LLM and handle responses
+
+**Secondary:**
+- TUI fixes (table rendering) if time permits
 
 ### Project Structure
 ```
 FastCode/
 ├── Cargo.toml
-└── rust-agent-platform/         # Main crate (worktree: .worktrees/rust-agent-platform/)
+├── docs/superpowers/plans/
+└── rust-agent-platform/         # Worktrees: rust-agent-platform/ & rust-agent-phase2/
     ├── Cargo.toml
     ├── src/
     │   ├── main.rs              # Binary entry
-    │   ├── lib.rs                # Library entry
-    │   ├── core/                 # ✅ Agent, Tool, Session, Provider traits
+    │   ├── lib.rs               # Library entry
+    │   ├── core/                # ✅ Agent, Tool, Session, Provider traits
     │   ├── tools/                # ✅ bash, read, write, edit, grep
-    │   ├── tui/                  # 🔄 Terminal UI (app.rs in progress)
+    │   ├── tui/                  # 🔄 Terminal UI
     │   ├── providers/            # ✅ OpenAI, Anthropic, Ollama, DeepSeek, MiniMax, Custom
     │   ├── platform/             # ✅ Intent Gate, Hook, Skill, Boulder
     │   ├── orchestration/        # 🔄 Agent orchestration (scheduler, message_bus)
@@ -32,27 +43,29 @@ FastCode/
     └── tests/
 ```
 
-### Phase 1 Tasks
-1. ✅ Project Scaffolding
-2. ✅ Provider Abstraction Layer
-3. ✅ Tool System Implementation
-4. 🔄 TUI Implementation (table rendering fixes in progress)
-5. ✅ Intent Gate Classification
-6. ✅ Hook System
-7. ✅ Skill Loading
-8. 🔄 MCP Integration
-9. 🔄 Agent Orchestration
-10. ✅ Boulder Persistence
+### Phase 1 & 2 Achievements ✅
 
-### Phase 2-3 Progress
-| Component | Status | Notes |
-|-----------|--------|-------|
-| Intent Gate | ✅ | Category classification working |
+| Task | Status | Notes |
+|------|--------|-------|
+| Project Scaffolding | ✅ | Core types, workspace setup |
+| Provider Abstraction | ✅ | Multi-provider support with stream_chat |
+| Tool System | ✅ | bash, read, write, edit, grep |
+| Intent Gate | ✅ | Category classification |
 | Hook System | ✅ | 52 hooks implemented |
-| Skill Loading | ✅ | SKILL.md format supported |
-| MCP Client | 🔄 | Protocol implemented, streaming pending |
-| Agent Orchestration | 🔄 | Scheduler, message bus working |
-| Boulder Persistence | ✅ | SQLite-based TODO tracking |
+| Skill Loading | ✅ | SKILL.md format |
+| Boulder Persistence | ✅ | SQLite storage |
+| Agent Orchestration | ✅ | Scheduler, MessageBus framework |
+| TUI | 🔄 | Basic functionality, table rendering needs work |
+
+### Phase 3 Tasks (In Progress)
+
+| Task | Priority | Status |
+|------|----------|--------|
+| MCP Client HTTP Communication | HIGH | Pending |
+| Agent-Orchestration Integration | HIGH | Pending |
+| Agent-Provider Integration | HIGH | Pending |
+| Agent Tool Calling | MEDIUM | Pending |
+| End-to-End Testing | MEDIUM | Pending |
 
 ### Tech Stack
 - **Agent Core:** Custom Rust implementation
@@ -61,15 +74,25 @@ FastCode/
 - **TUI:** ratatui 0.26
 - **Storage:** SQLite (rusqlite)
 
-### Open Issues
-- [ ] TUI table rendering: cell wrapping, column alignment, borders
-- [ ] Provider streaming: stream_chat() implementation
-- [ ] MCP: Real-time streaming output
-
-### Build & Run
+### Build & Run (Phase 2 Worktree)
 ```bash
-cd .worktrees/rust-agent-platform/rust-agent-platform
+cd .worktrees/rust-agent-phase2/rust-agent-platform
 cargo build --bin ragent
 cargo test
 cargo run --bin ragent
+```
+
+### Git Workflow
+```bash
+# Worktree management
+git worktree list
+
+# Switch between worktrees
+cd .worktrees/rust-agent-phase2/rust-agent-platform  # Phase 2 development
+cd .worktrees/rust-agent-platform/rust-agent-platform  # Previous work
+
+# Commit changes in worktree
+git add -A
+git commit -m "your message"
+git push -u origin feature/rust-agent-phase2
 ```
