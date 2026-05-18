@@ -193,6 +193,7 @@ let data: serde_json::Value = response.json().await?;
                 serde_json::json!({ "role": m.role, "content": m.content })
             }).collect::<Vec<_>>(),
             "tools": tools_json,
+            "tool_choice": "auto",
             "stream": true,
             "thinking": {
                 "type": "enabled"

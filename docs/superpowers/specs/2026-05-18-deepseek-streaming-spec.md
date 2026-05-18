@@ -29,6 +29,28 @@ data: [DONE]
 | `content` | string | 正文回复 |
 | `tool_calls` | array | 工具调用数组 |
 
+### 2.3 API 请求参数
+
+使用 tools 时，建议添加 `tool_choice` 参数：
+
+| 参数 | 值 | 说明 |
+|------|------|------|
+| `tool_choice` | `"auto"` | 模型自动决定是否调用工具 |
+| `tool_choice` | `"required"` | 强制模型调用工具 |
+| `tool_choice` | `"none"` | 禁止模型调用工具 |
+
+```rust
+let request_body = serde_json::json!({
+    "model": self.model,
+    "messages": [...],
+    "tools": tools_json,
+    "tool_choice": "auto",
+    "stream": true,
+    "thinking": { "type": "enabled" },
+    "reasoning_effort": "low"
+});
+```
+
 ## 3. 状态机定义
 
 ### 3.1 状态枚举
