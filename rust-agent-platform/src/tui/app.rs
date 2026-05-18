@@ -328,24 +328,18 @@ fn render_markdown(content: &str) -> Vec<Line<'_>> {
             Event::Text(text) => {
                 if in_table {
                     current_cell.push_str(&text);
-                } else if text.starts_with("<thinking>") {
+                } else if text.starts_with("<thinking>\n") {
                     current_spans.push(Span::styled("<thinking>", Style::new().bold().fg(Color::DarkGray)));
-                } else if text.starts_with("\n</thinking>") {
+                } else if text.starts_with("\n</thinking>\n") {
                     push_line(&mut lines, &mut current_spans);
-                } else if text.starts_with("<content>") {
-                } else if text.starts_with("\n</content>") {
+                } else if text.starts_with("<content>\n") {
+                } else if text.starts_with("\n</content>\n") {
                     push_line(&mut lines, &mut current_spans);
-                } else if text.starts_with("<tool>") {
+                } else if text.starts_with("<tool>\n") {
                     push_line(&mut lines, &mut current_spans);
                     current_spans.push(Span::styled("<tool>", Style::new().fg(Color::Cyan).bold()));
-                } else if text.starts_with("\n</tool>") {
+                } else if text.starts_with("\n</tool>\n") {
                     push_line(&mut lines, &mut current_spans);
-                } else if text.starts_with("</tool>") {
-                    push_line(&mut lines, &mut current_spans);
-                } else if text.starts_with("<tool>") {
-                    push_line(&mut lines, &mut current_spans);
-                    let tool_name = text.trim_start_matches("<tool>");
-                    current_spans.push(Span::styled(format!("<tool>{}", tool_name), Style::new().fg(Color::Cyan).bold()));
                 } else if in_code_block {
                     for (i, line) in text.split('\n').enumerate() {
                         if i > 0 {

@@ -81,18 +81,23 @@ enum StreamState {
 
 ### 4.1 标签定义
 
-| 标签 | 开始 | 结束 | 说明 |
-|------|------|------|------|
-| 思考链 | `<thinking>` | `\n</thinking>` | DeepSeek 特有 |
-| 正文 | `<content>` | `\n</content>` | 普通回复内容 |
-| 工具调用 | `<tool>` | `\n</tool>` | 仅包含工具名 |
+所有标签后都有换行符。
+
+| 标签 | 格式 | 说明 |
+|------|------|------|
+| 思考开始 | `<thinking>\n` | DeepSeek 特有 |
+| 思考结束 | `\n</thinking>\n` | 前后有换行 |
+| 正文开始 | `<content>\n` | 普通回复 |
+| 正文结束 | `\n</content>\n` | 前后有换行 |
+| 工具开始 | `<tool>\n` | 工具调用 |
+| 工具结束 | `\n</tool>\n` | 前后有换行 |
 
 ### 4.2 标签输出格式
 
 ```
-<thinking>reasoning_content 原文\n</thinking>
-<content>正文内容\n</content>
-<tool>工具名\n</tool>
+<thinking>\nreasoning_content 原文\n</thinking>\n
+<content>\n正文内容\n</content>\n
+<tool>\nbash\n</tool>\n
 ```
 
 ## 5. 处理规则

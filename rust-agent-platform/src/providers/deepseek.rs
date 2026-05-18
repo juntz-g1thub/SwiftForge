@@ -229,7 +229,7 @@ let data: serde_json::Value = response.json().await?;
                         if let Some(reasoning) = json["choices"][0]["delta"]["reasoning_content"].as_str() {
                             if !reasoning.is_empty() {
                                 if !is_thinking {
-                                    on_chunk("<thinking>".to_string());
+                                    on_chunk("<thinking>\n".to_string());
                                     is_thinking = true;
                                 }
                                 on_chunk(reasoning.to_string());
@@ -238,13 +238,13 @@ let data: serde_json::Value = response.json().await?;
                         if let Some(content) = json["choices"][0]["delta"]["content"].as_str() {
                             if !content.is_empty() {
                                 if is_thinking {
-                                    on_chunk("\n</thinking>\n<content>".to_string());
+                                    on_chunk("\n</thinking>\n<content>\n".to_string());
                                     is_thinking = false;
                                 } else {
-                                    on_chunk("<content>".to_string());
+                                    on_chunk("<content>\n".to_string());
                                 }
                                 on_chunk(content.to_string());
-                                on_chunk("\n</content>".to_string());
+                                on_chunk("\n</content>\n".to_string());
                             }
                         }
                         if let Some(tool_calls) = json["choices"][0]["delta"]["tool_calls"].as_array() {
@@ -253,13 +253,13 @@ let data: serde_json::Value = response.json().await?;
                                     let name = func.get("name").and_then(|n| n.as_str()).unwrap_or("");
                                     if !name.is_empty() {
                                         if is_thinking {
-                                            on_chunk("\n</thinking>\n<tool>".to_string());
+                                            on_chunk("\n</thinking>\n<tool>\n".to_string());
                                             is_thinking = false;
                                         } else {
-                                            on_chunk("<tool>".to_string());
+                                            on_chunk("<tool>\n".to_string());
                                         }
                                         on_chunk(name.to_string());
-                                        on_chunk("\n</tool>".to_string());
+                                        on_chunk("\n</tool>\n".to_string());
                                     }
                                 }
                             }
