@@ -11,7 +11,23 @@ pub struct ProviderConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelResponse {
     pub content: String,
+    pub tool_calls: Option<Vec<serde_json::Value>>,
     pub usage: Usage,
+}
+
+impl ModelResponse {
+    pub fn new(content: String, usage: Usage) -> Self {
+        Self {
+            content,
+            tool_calls: None,
+            usage,
+        }
+    }
+
+    pub fn with_tool_calls(mut self, tool_calls: Vec<serde_json::Value>) -> Self {
+        self.tool_calls = Some(tool_calls);
+        self
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

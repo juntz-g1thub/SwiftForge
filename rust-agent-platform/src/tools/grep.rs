@@ -15,7 +15,23 @@ impl GrepTool {
 impl Tool for GrepTool {
     fn name(&self) -> &str { "grep" }
     fn description(&self) -> &str { "Search for pattern in file" }
-    
+    fn input_schema(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Path to the file to search"
+                },
+                "pattern": {
+                    "type": "string",
+                    "description": "Pattern to search for"
+                }
+            },
+            "required": ["path", "pattern"]
+        })
+    }
+
     async fn execute(&self, call: ToolCall) -> ToolResult {
         let path = call.arguments.get("path")
             .and_then(|v| v.as_str())

@@ -14,7 +14,19 @@ impl ReadTool {
 impl Tool for ReadTool {
     fn name(&self) -> &str { "read" }
     fn description(&self) -> &str { "Read file contents" }
-    
+    fn input_schema(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Path to the file to read"
+                }
+            },
+            "required": ["path"]
+        })
+    }
+
     async fn execute(&self, call: ToolCall) -> ToolResult {
         let path = call.arguments.get("path")
             .and_then(|v| v.as_str())

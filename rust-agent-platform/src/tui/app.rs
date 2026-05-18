@@ -8,10 +8,25 @@ use ratatui::{backend::CrosstermBackend, Frame, Terminal};
 use std::io::Stdout;
 use std::sync::mpsc::{self, TryRecvError};
 use std::time::Duration;
+use std::sync::Arc;
 
-use crate::providers::{LLMProvider, OpenAIProvider, AnthropicProvider, OllamaProvider, DeepSeekProvider, MiniMaxProvider, CustomProvider};
-use crate::core::Message;
+use crate::providers::{LLMProvider, OpenAIProvider, AnthropicProvider, OllamaProvider, DeepSeekProvider, MiniMaxProvider, CustomProvider, ToolCallingProvider};
+use crate::core::{Message, Agent, AgentConfig, AgentRole, ToolRegistry};
+use crate::tools::{BashTool, ReadTool, WriteTool, EditTool, GrepTool};
 use crate::tui::config::ConfigManager;
+
+fn chrono_lite_timestamp() -> String {
+    use std::time::SystemTime;
+    let now = SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default();
+    let secs = now.as_secs();
+    let hours = (secs / 3600) % 24;
+    let mins = (secs / 60) % 60;
+    let secs = secs % 60;
+    let millis = now.subsec_millis();
+    format!("{:02}:{:02}:{:02}.{:03}", hours, mins, secs, millis)
+}
 
 fn display_width(c: char) -> usize {
     match c {
@@ -313,12 +328,24 @@ fn render_markdown(content: &str) -> Vec<Line<'_>> {
             Event::Text(text) => {
                 if in_table {
                     current_cell.push_str(&text);
-                } else if text.starts_with("[thinking]") {
-                    current_spans.push(Span::styled("[thinking] ", Style::new().bold().fg(Color::DarkGray).on_dark_gray()));
-                    let rest = text.replace("[thinking]", "");
-                    if !rest.is_empty() {
-                        current_spans.push(Span::styled(rest, Style::new().fg(Color::DarkGray).on_dark_gray()));
-                    }
+                } else if text.starts_with("<thinking>") {
+                    current_spans.push(Span::styled("<thinking>", Style::new().bold().fg(Color::DarkGray)));
+                } else if text.starts_with("\n</thinking>") {
+                    push_line(&mut lines, &mut current_spans);
+                } else if text.starts_with("<content>") {
+                } else if text.starts_with("\n</content>") {
+                    push_line(&mut lines, &mut current_spans);
+                } else if text.starts_with("<tool>") {
+                    push_line(&mut lines, &mut current_spans);
+                    current_spans.push(Span::styled("<tool>", Style::new().fg(Color::Cyan).bold()));
+                } else if text.starts_with("\n</tool>") {
+                    push_line(&mut lines, &mut current_spans);
+                } else if text.starts_with("</tool>") {
+                    push_line(&mut lines, &mut current_spans);
+                } else if text.starts_with("<tool>") {
+                    push_line(&mut lines, &mut current_spans);
+                    let tool_name = text.trim_start_matches("<tool>");
+                    current_spans.push(Span::styled(format!("<tool>{}", tool_name), Style::new().fg(Color::Cyan).bold()));
                 } else if in_code_block {
                     for (i, line) in text.split('\n').enumerate() {
                         if i > 0 {
@@ -380,6 +407,15 @@ pub struct App {
     scrollbar_state: ScrollbarState,
     scroll_offset: usize,
     content_height: usize,
+    debug_scroll_offset: usize,
+    debug_content_height: usize,
+    agent: Agent,
+    tool_registry: Arc<ToolRegistry>,
+show_debug: bool,
+    debug_messages: Vec<String>,
+    debug_log_path: Option<std::path::PathBuf>,
+    debug_rx: Option<std::sync::mpsc::Receiver<String>>,
+    debug_tx: Option<std::sync::mpsc::Sender<String>>,
 }
 
 pub enum AppMode {
@@ -396,8 +432,65 @@ pub enum AppMode {
 
 impl App {
     pub fn new() -> Self {
+        Self::new_internal(false)
+    }
+
+    pub fn new_debug(show_debug: bool) -> Self {
+        Self::new_internal(show_debug)
+    }
+
+    fn new_internal(show_debug: bool) -> Self {
         let config = ConfigManager::new();
         let system_prompt = config.get_system_prompt();
+
+        let mut tool_registry = ToolRegistry::new();
+        tool_registry.register(BashTool::new());
+        tool_registry.register(ReadTool::new());
+        tool_registry.register(WriteTool::new());
+        tool_registry.register(EditTool::new());
+        tool_registry.register(GrepTool::new());
+        let tool_registry = Arc::new(tool_registry);
+
+        let agent_config = AgentConfig {
+            name: "tui-agent".to_string(),
+            role: AgentRole::Executor,
+            model: None,
+            temperature: 0.7,
+        };
+        let agent = Agent::new(agent_config)
+            .with_tool_registry(Arc::clone(&tool_registry));
+
+let debug_channel = if show_debug {
+            let (tx, rx) = std::sync::mpsc::channel();
+            Some((tx, rx))
+        } else {
+            None
+        };
+
+        let debug_log_path = if show_debug {
+            let log_dir = dirs::home_dir()
+                .unwrap_or_else(|| std::path::PathBuf::from("."))
+                .join(".fastcode");
+            std::fs::create_dir_all(&log_dir).ok();
+            let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+            let log_path = log_dir.join(format!("ragent_{}.log", timestamp));
+            std::fs::write(&log_path, "").ok();
+            std::env::set_var("DEBUG_LOG_PATH", log_path.to_string_lossy().to_string());
+            Some(log_path)
+        } else {
+            None
+        };
+
+        let (debug_tx, debug_rx) = if show_debug {
+            if let Some((tx, rx)) = debug_channel {
+                (Some(tx), Some(rx))
+            } else {
+                (None, None)
+            }
+        } else {
+            (None, None)
+        };
+
         Self {
             config,
             mode: AppMode::Chat,
@@ -414,6 +507,40 @@ impl App {
             scrollbar_state: ScrollbarState::new(0),
             scroll_offset: 0,
             content_height: 0,
+            debug_scroll_offset: 0,
+            debug_content_height: 0,
+            agent,
+            tool_registry,
+            show_debug,
+            debug_messages: Vec::new(),
+            debug_log_path,
+            debug_rx,
+            debug_tx,
+        }
+    }
+
+    fn log_debug(&mut self, message: &str) {
+        let timestamp = chrono_lite_timestamp();
+        let formatted = format!("[{}] {}", timestamp, message);
+
+        if self.show_debug {
+            self.debug_messages.push(formatted.clone());
+            if self.debug_messages.len() > 100 {
+                self.debug_messages.remove(0);
+            }
+        }
+
+        if let Some(ref path) = self.debug_log_path {
+            if let Err(e) = std::fs::OpenOptions::new()
+                .append(true)
+                .open(path)
+                .and_then(|mut file| {
+                    use std::io::Write;
+                    writeln!(file, "{}", formatted)
+                })
+            {
+                eprintln!("Failed to write debug log: {}", e);
+            }
         }
     }
 
@@ -440,6 +567,8 @@ impl App {
                             self.streaming_text = Some(chunk);
                         }
                     }
+                    Ok(Ok(_)) => {
+                    }
                     Ok(Err(e)) => {
                         let partial = self.streaming_text.clone().unwrap_or_default();
                         self.messages.push(("error".to_string(), format!("{} (partial: {})", e, partial)));
@@ -455,6 +584,15 @@ impl App {
                         self.response_receiver = None;
                     }
                     Err(TryRecvError::Empty) => {}
+                }
+            }
+
+            if let Some(ref rx) = self.debug_rx {
+                while let Ok(msg) = rx.try_recv() {
+                    self.debug_messages.push(msg);
+                    if self.debug_messages.len() > 100 {
+                        self.debug_messages.remove(0);
+                    }
                 }
             }
 
@@ -535,12 +673,15 @@ impl App {
     }
 
     fn render_chat(&mut self, f: &mut Frame) {
+        let debug_height = if self.show_debug { 8 } else { 0 };
+
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Min(1),
                 Constraint::Length(3),
                 Constraint::Length(1),
+                Constraint::Length(debug_height),
             ].as_ref())
             .split(f.size());
 
@@ -630,6 +771,38 @@ impl App {
         let status_text = format!("[{}] - Press Ctrl+Q to quit, Ctrl+S for settings", status_provider);
         let status_para = Paragraph::new(status_text.as_str());
         f.render_widget(status_para, chunks[2]);
+
+        if self.show_debug {
+            let debug_lines: Vec<Line> = self.debug_messages.iter()
+                .flat_map(|msg| {
+                    let wrapped = wrap_text_to_width(msg, chunks[3].width as usize - 2);
+                    wrapped.into_iter().map(Line::from).collect::<Vec<_>>()
+                })
+                .collect();
+
+            self.debug_content_height = debug_lines.len();
+            let debug_visible_height = chunks[3].height as usize;
+
+            let max_debug_scroll = if self.debug_content_height > debug_visible_height {
+                self.debug_content_height - debug_visible_height
+            } else {
+                0
+            };
+            if self.debug_scroll_offset > max_debug_scroll {
+                self.debug_scroll_offset = max_debug_scroll;
+            }
+
+            let scrollable_debug_lines: Vec<Line> = if self.debug_scroll_offset >= debug_lines.len() {
+                debug_lines.clone()
+            } else {
+                debug_lines[self.debug_scroll_offset..].to_vec()
+            };
+
+            let debug_para = Paragraph::new(Text::from(scrollable_debug_lines))
+                .block(Block::default().borders(Borders::ALL).title("Debug Log (↑↓ scroll)"))
+                .style(Style::new().red());
+            f.render_widget(debug_para, chunks[3]);
+        }
     }
 
     fn handle_key_event(&mut self, key: event::KeyEvent) -> Result<()> {
@@ -719,6 +892,36 @@ impl App {
             KeyCode::Delete => {
                 self.remove_char_at_cursor();
             }
+            KeyCode::Up => {
+                if self.show_debug && self.debug_content_height > 0 {
+                    if self.debug_scroll_offset > 0 {
+                        self.debug_scroll_offset -= 1;
+                    }
+                    return Ok(());
+                }
+                if self.scroll_offset > 0 {
+                    self.scroll_offset -= 1;
+                }
+                return Ok(());
+            }
+            KeyCode::Down => {
+                if self.show_debug && self.debug_content_height > 0 {
+                    let max_debug_scroll = self.debug_content_height.saturating_sub(1);
+                    if self.debug_scroll_offset < max_debug_scroll {
+                        self.debug_scroll_offset += 1;
+                    }
+                    return Ok(());
+                }
+                let max_scroll = if self.content_height > 0 {
+                    self.content_height.saturating_sub(1)
+                } else {
+                    0
+                };
+                if self.scroll_offset < max_scroll {
+                    self.scroll_offset += 1;
+                }
+                return Ok(());
+            }
             KeyCode::Left => {
                 self.move_cursor_left();
             }
@@ -747,83 +950,114 @@ impl App {
         Ok(())
     }
 
-    fn send_to_provider(&mut self) {
+fn send_to_provider(&mut self) {
         let provider_name = self.config.get_provider().to_string();
         let api_key_opt = self.config.get_api_key(&provider_name);
         let base_url_opt = self.config.get_base_url(&provider_name);
         let model_opt = Some(self.config.get_model(&provider_name));
+        let debug_log_path = self.debug_log_path.clone();
+        let debug_tx = self.debug_tx.clone();
 
-        let messages: Vec<Message> = self.messages.iter()
-            .map(|(role, content)| Message { role: role.clone(), content: content.clone() })
-            .collect();
+        let user_input = self.messages.last()
+            .map(|(_, content)| content.clone())
+            .unwrap_or_default();
 
         let (tx, rx) = mpsc::channel();
         self.response_receiver = Some(rx);
 
+        let agent = Arc::new(self.agent.clone());
+
         std::thread::spawn(move || {
             let rt = tokio::runtime::Runtime::new().unwrap();
             rt.block_on(async {
-                let result: Result<(), anyhow::Error> = match provider_name.as_str() {
+                let mut agent = (*agent).clone();
+
+                let log = |msg: &str, log_path: &Option<std::path::PathBuf>, tx: &Option<std::sync::mpsc::Sender<String>>| {
+                    let timestamp = chrono_lite_timestamp();
+                    let formatted = format!("[{}] {}", timestamp, msg);
+                    if let Some(ref path) = log_path {
+                        if let Err(e) = std::fs::OpenOptions::new()
+                            .append(true)
+                            .open(path)
+                            .and_then(|mut file| {
+                                use std::io::Write;
+                                writeln!(file, "{}", formatted)
+                            }) {
+                            eprintln!("Failed to write debug log: {}", e);
+                        }
+                    }
+                    if let Some(ref t) = tx {
+                        if let Err(e) = t.send(formatted.clone()) {
+                            eprintln!("Failed to send debug log: {}", e);
+                        }
+                    }
+                };
+
+                log(&format!("Starting request to {}", provider_name), &debug_log_path, &debug_tx);
+
+                match provider_name.as_str() {
                     "openai" => {
                         let p = OpenAIProvider::new(api_key_opt.unwrap_or_default(), base_url_opt);
-                        let tx_clone = tx.clone();
-                        p.stream_chat(messages, move |chunk| {
-                            let _ = tx_clone.send(Ok(chunk));
-                        }).await
+                        agent = agent.with_tool_provider("openai", p);
                     }
                     "anthropic" => {
                         let p = AnthropicProvider::new(api_key_opt.unwrap_or_default(), base_url_opt);
-                        let tx_clone = tx.clone();
-                        p.stream_chat(messages, move |chunk| {
-                            let _ = tx_clone.send(Ok(chunk));
-                        }).await
+                        agent = agent.with_tool_provider("anthropic", p);
                     }
                     "ollama" => {
                         let p = OllamaProvider::new(base_url_opt, model_opt);
-                        let tx_clone = tx.clone();
-                        p.stream_chat(messages, move |chunk| {
-                            let _ = tx_clone.send(Ok(chunk));
-                        }).await
+                        agent = agent.with_tool_provider("ollama", p);
                     }
                     "deepseek" => {
                         let p = DeepSeekProvider::new(api_key_opt.unwrap_or_default(), base_url_opt, model_opt);
-                        let tx_clone = tx.clone();
-                        p.stream_chat(messages, move |chunk| {
-                            let _ = tx_clone.send(Ok(chunk));
-                        }).await
+                        agent = agent.with_tool_provider("deepseek", p);
                     }
                     "minimax" => {
                         let p = MiniMaxProvider::new(api_key_opt.unwrap_or_default(), base_url_opt, model_opt);
-                        let tx_clone = tx.clone();
-                        p.stream_chat(messages, move |chunk| {
-                            let _ = tx_clone.send(Ok(chunk));
-                        }).await
+                        agent = agent.with_tool_provider("minimax", p);
                     }
                     "custom" => {
                         let name = "custom".to_string();
                         let p = CustomProvider::new(name, api_key_opt.unwrap_or_default(), base_url_opt.unwrap_or_default(), model_opt.unwrap_or_default());
-                        let tx_clone = tx.clone();
-                        p.stream_chat(messages, move |chunk| {
-                            let _ = tx_clone.send(Ok(chunk));
-                        }).await
+                        agent = agent.with_tool_provider("custom", p);
                     }
                     _ => {
                         let p = OpenAIProvider::new(api_key_opt.unwrap_or_default(), base_url_opt);
-                        let tx_clone = tx.clone();
-                        p.stream_chat(messages, move |chunk| {
-                            let _ = tx_clone.send(Ok(chunk));
-                        }).await
+                        agent = agent.with_tool_provider("openai", p);
                     }
-                };
+                }
 
-                if let Err(e) = result {
-                    let _ = tx.send(Err(e));
+                if agent.has_tool_provider() {
+                    let tools = agent.get_tool_definitions();
+                    log(&format!("Tools available: {}", tools.len()), &debug_log_path, &debug_tx);
+                    for t in &tools {
+                        log(&format!("  - {}: {}", t.name, t.description), &debug_log_path, &debug_tx);
+                    }
+
+                    let has_tp = agent.has_tool_provider();
+                    log(&format!("has_tool_provider: {}", has_tp), &debug_log_path, &debug_tx);
+
+                    match agent.run_agent_loop(&user_input, 5, debug_log_path.clone().map(|p| p.to_string_lossy().to_string()), debug_tx.clone(), Some(tx.clone())).await {
+                        Ok(response) => {
+                            log(&format!("Response length: {}", response.len()), &debug_log_path, &debug_tx);
+                            let preview = response.chars().take(200).collect::<String>();
+                            log(&format!("Response preview: '{}'", preview), &debug_log_path, &debug_tx);
+                            drop(tx);
+                        }
+                        Err(e) => {
+                            log(&format!("Error: {}", e), &debug_log_path, &debug_tx);
+                            let _ = tx.send(Err(e));
+                        }
+                    }
+                } else {
+                    let msg = "No tool provider configured";
+                    log(msg, &debug_log_path, &debug_tx);
+                    let _ = tx.send(Err(anyhow::anyhow!(msg)));
                 }
             });
         });
     }
-
-    fn render_config_provider(&self, f: &mut Frame) {
+                    fn render_config_provider(&self, f: &mut Frame) {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([

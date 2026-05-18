@@ -9,6 +9,13 @@ struct DummyTool;
 impl Tool for DummyTool {
     fn name(&self) -> &str { "dummy" }
     fn description(&self) -> &str { "A dummy tool" }
+    fn input_schema(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {},
+            "required": []
+        })
+    }
     async fn execute(&self, _call: ToolCall) -> ToolResult {
         ToolResult { success: true, output: Some("done".to_string()), error: None }
     }

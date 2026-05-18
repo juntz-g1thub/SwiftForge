@@ -14,7 +14,27 @@ impl EditTool {
 impl Tool for EditTool {
     fn name(&self) -> &str { "edit" }
     fn description(&self) -> &str { "Edit file contents (replace oldString with newString)" }
-    
+    fn input_schema(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Path to the file to edit"
+                },
+                "oldString": {
+                    "type": "string",
+                    "description": "The string to find and replace"
+                },
+                "newString": {
+                    "type": "string",
+                    "description": "The new string to replace with"
+                }
+            },
+            "required": ["path", "oldString", "newString"]
+        })
+    }
+
     async fn execute(&self, call: ToolCall) -> ToolResult {
         let path = call.arguments.get("path")
             .and_then(|v| v.as_str())

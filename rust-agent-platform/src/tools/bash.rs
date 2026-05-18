@@ -14,7 +14,19 @@ impl BashTool {
 impl Tool for BashTool {
     fn name(&self) -> &str { "bash" }
     fn description(&self) -> &str { "Execute shell commands" }
-    
+    fn input_schema(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "command": {
+                    "type": "string",
+                    "description": "The shell command to execute"
+                }
+            },
+            "required": ["command"]
+        })
+    }
+
     async fn execute(&self, call: ToolCall) -> ToolResult {
         let command = call.arguments.get("command")
             .and_then(|v| v.as_str())
