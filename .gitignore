@@ -11,8 +11,7 @@ worktrees/
 Thumbs.db
 
 # Session files
-*.md
-!README.md
+session*.md
 
 # Rust build
 target/
