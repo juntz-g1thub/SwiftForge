@@ -1,9 +1,6 @@
 use anyhow::Result;
 use clap::Parser;
-use crossterm::execute;
-use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
-use ratatui::{backend::CrosstermBackend, Terminal};
-use rust_agent_platform::tui::App;
+use rust_agent_platform::tui::app_controller::AppController;
 use std::io;
 
 #[derive(Parser, Debug)]
@@ -26,18 +23,8 @@ fn main() -> anyhow::Result<()> {
 
     tracing::info!("Starting Rust Agent Platform...");
 
-    crossterm::terminal::enable_raw_mode()?;
-    let mut stdout = std::io::stdout();
-    execute!(stdout, EnterAlternateScreen)?;
-
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
-
-    let mut app = App::new_debug(args.debug);
-    app.run(&mut terminal)?;
-
-    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
-    crossterm::terminal::disable_raw_mode()?;
+    let mut app = AppController::new(args.debug)?;
+    app.run()?;
 
     Ok(())
 }
