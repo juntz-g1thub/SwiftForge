@@ -292,8 +292,8 @@ impl Agent {
         let current_tool_call_clone = current_tool_call.clone();
 
         let on_chunk_wrapper = Box::new(move |chunk: String| {
-            let has_tool_start = chunk.starts_with("<tool>");
-            let has_tool_end = chunk.contains("</tool>");
+            let has_tool_start = chunk.starts_with("<tool_call>");
+            let has_tool_end = chunk.contains("</tool_call>");
             let in_tool = *in_tool_call_clone.lock().unwrap();
 
             if has_tool_start {
@@ -303,7 +303,7 @@ impl Agent {
                 if has_tool_end {
                     let full = current_tool_call_clone.lock().unwrap().clone();
                     if let Some(json_start) = full.find("{") {
-                        let json_end = full.find("</tool>").unwrap_or(full.len());
+                        let json_end = full.rfind("}").map(|i| i+1).unwrap_or(full.len());
                         let json_str = full[json_start..json_end].trim();
                         if !json_str.is_empty() && json_str.starts_with("{") {
                             if let Ok(json) = serde_json::from_str::<serde_json::Value>(json_str) {
@@ -319,7 +319,7 @@ impl Agent {
                 if has_tool_end {
                     let full = current_tool_call_clone.lock().unwrap().clone();
                     if let Some(json_start) = full.find("{") {
-                        let json_end = full.find("</tool>").unwrap_or(full.len());
+                        let json_end = full.rfind("}").map(|i| i+1).unwrap_or(full.len());
                         let json_str = full[json_start..json_end].trim();
                         if !json_str.is_empty() && json_str.starts_with("{") {
                             if let Ok(json) = serde_json::from_str::<serde_json::Value>(json_str) {

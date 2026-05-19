@@ -10,6 +10,46 @@ pub struct DeepSeekProvider {
     model: String,
 }
 
+/// Helper function to write log entries consistently
+fn write_log(entry: &str) {
+    let timestamp = chrono::Local::now().format("%H:%M:%S%.3f");
+    let formatted = format!("[{}] DEEPSEEK: {}\n", timestamp, entry);
+
+    if let Ok(log_path) = std::env::var("DEBUG_LOG_PATH") {
+        if let Ok(mut file) = std::fs::OpenOptions::new().append(true).open(&log_path) {
+            use std::io::Write;
+            let _ = writeln!(file, "{}", formatted.trim());
+        }
+    }
+}
+
+/// Log request body with pretty-printed JSON
+fn log_request(body: &serde_json::Value) {
+    if let Ok(json_str) = serde_json::to_string_pretty(body) {
+        write_log(&format!("REQUEST:\n{}", json_str));
+    }
+}
+
+/// Log raw SSE chunk before parsing
+fn log_raw_chunk(line: &str) {
+    let trimmed = line.trim();
+    write_log(&format!("RAW: {}", trimmed));
+}
+
+/// Log parse state for each delta
+fn log_parse_state(reasoning: Option<&str>, content: Option<&str>, tool_calls_count: usize, is_thinking: bool) {
+    let reasoning_preview = reasoning
+        .map(|s| s.chars().take(80).collect::<String>())
+        .map(|s| format!("\"{}\"", s))
+        .unwrap_or_else(|| "None".to_string());
+    let content_preview = content
+        .map(|s| s.chars().take(80).collect::<String>())
+        .map(|s| format!("\"{}\"", s))
+        .unwrap_or_else(|| "None".to_string());
+    write_log(&format!("PARSE: reasoning={}, content={}, tools={}, is_thinking={}",
+        reasoning_preview, content_preview, tool_calls_count, is_thinking));
+}
+
 impl DeepSeekProvider {
     pub fn new(api_key: String, base_url: Option<String>, model: Option<String>) -> Self {
         Self {
@@ -201,6 +241,8 @@ let data: serde_json::Value = response.json().await?;
             "reasoning_effort": "low"
         });
 
+        log_request(&request_body);
+
         let response = client
             .post(format!("{}/chat/completions", self.base_url))
             .header("Authorization", format!("Bearer {}", self.api_key))
@@ -211,6 +253,10 @@ let data: serde_json::Value = response.json().await?;
 
         let mut stream = response.bytes_stream();
         let mut is_thinking = false;
+        let mut current_tool_name = String::new();
+        let mut current_tool_arguments = String::new();
+        let mut in_tool_call = false;
+        let mut pending_tool_call: Option<serde_json::Value> = None;
 
         while let Some(chunk_result) = stream.next().await {
             let chunk = chunk_result?;
@@ -222,12 +268,30 @@ let data: serde_json::Value = response.json().await?;
                     continue;
                 }
                 if line.starts_with("data:") {
+                    log_raw_chunk(line);
                     let data = line.trim_start_matches("data:").trim();
                     if data == "[DONE]" {
+                        if in_tool_call && !current_tool_name.is_empty() {
+                            if let Ok(args_json) = serde_json::from_str::<serde_json::Value>(&current_tool_arguments) {
+                                let tool_call_json = serde_json::json!({
+                                    "name": current_tool_name,
+                                    "arguments": args_json
+                                });
+                                on_chunk(serde_json::to_string(&tool_call_json).unwrap());
+                                on_chunk("\n</tool_call>\n".to_string());
+                            }
+                        }
+                        write_log("STREAM: [DONE]");
                         return Ok(());
                     }
                     if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
-                        if let Some(reasoning) = json["choices"][0]["delta"]["reasoning_content"].as_str() {
+                        let reasoning = json["choices"][0]["delta"]["reasoning_content"].as_str();
+                        let content = json["choices"][0]["delta"]["content"].as_str();
+                        let tool_calls = json["choices"][0]["delta"]["tool_calls"].as_array();
+                        let tool_count = tool_calls.as_ref().map(|a| a.len()).unwrap_or(0);
+                        log_parse_state(reasoning, content, tool_count, is_thinking);
+
+                        if let Some(reasoning) = reasoning {
                             if !reasoning.is_empty() {
                                 if !is_thinking {
                                     on_chunk("<thinking>\n".to_string());
@@ -236,7 +300,7 @@ let data: serde_json::Value = response.json().await?;
                                 on_chunk(reasoning.to_string());
                             }
                         }
-                        if let Some(content) = json["choices"][0]["delta"]["content"].as_str() {
+                        if let Some(content) = content {
                             if !content.is_empty() {
                                 if is_thinking {
                                     on_chunk("\n</thinking>\n<content>\n".to_string());
@@ -247,20 +311,43 @@ let data: serde_json::Value = response.json().await?;
                                 on_chunk(content.to_string());
                                 on_chunk("\n</content>\n".to_string());
                             }
+                            if in_tool_call && !current_tool_name.is_empty() {
+                                if let Ok(args_json) = serde_json::from_str::<serde_json::Value>(&current_tool_arguments) {
+                                    let tool_call_json = serde_json::json!({
+                                        "name": current_tool_name,
+                                        "arguments": args_json
+                                    });
+                                    on_chunk(serde_json::to_string(&tool_call_json).unwrap());
+                                    on_chunk("\n</tool_call>\n".to_string());
+                                }
+                                current_tool_name.clear();
+                                current_tool_arguments.clear();
+                                in_tool_call = false;
+                            }
                         }
-                        if let Some(tool_calls) = json["choices"][0]["delta"]["tool_calls"].as_array() {
+                        if let Some(tool_calls) = tool_calls {
                             for tool_call in tool_calls {
                                 if let Some(func) = tool_call.get("function") {
                                     let name = func.get("name").and_then(|n| n.as_str()).unwrap_or("");
-                                    if !name.is_empty() {
+                                    let arguments = func.get("arguments").and_then(|a| a.as_str()).unwrap_or("");
+
+                                    if !name.is_empty() && !in_tool_call {
+                                        current_tool_name = name.to_string();
+                                        current_tool_arguments = String::new();
+                                        in_tool_call = true;
+
                                         if is_thinking {
-                                            on_chunk("\n</thinking>\n<tool>\n".to_string());
+                                            on_chunk("\n</thinking>\n<tool_call>\n".to_string());
                                             is_thinking = false;
                                         } else {
-                                            on_chunk("<tool>\n".to_string());
+                                            on_chunk("<tool_call>\n".to_string());
                                         }
-                                        on_chunk(name.to_string());
-                                        on_chunk("\n</tool>\n".to_string());
+                                        write_log(&format!("TOOL_CALL_START: {}", name));
+                                    }
+
+                                    if in_tool_call && !arguments.is_empty() {
+                                        current_tool_arguments.push_str(arguments);
+                                        write_log(&format!("TOOL_CALL_ARG: {}", arguments));
                                     }
                                 }
                             }
@@ -270,6 +357,7 @@ let data: serde_json::Value = response.json().await?;
             }
         }
 
+        write_log("STREAM: ended (no [DONE] received)");
         Ok(())
     }
 }
