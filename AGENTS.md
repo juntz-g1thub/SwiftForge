@@ -1,50 +1,26 @@
 # AGENTS.md
 
-## Project Overview
+## Project
 
 **rust-agent-platform** — Rust TUI agent platform with streaming LLM support and tool calling.
-**Language**: Rust
 **Source**: `rust-agent-platform/` (workspace member)
 
 ## Git Workflow
 
 详细规范见 [.git-workflow.md](.git-workflow.md)。
 
-**分支命名**: `类型/范围-名称`（feat, fix, refactor, chore, docs, test, perf）
-**工作树**: `.worktrees/{branch-name}`（`/` 替换为 `-`）
-**工作树列表**: `git worktree list`
-
 > ⚠️ 所有 git 操作必须由用户手动执行，切勿自动运行 git 命令。
 
-## Architecture
+## Current Focus
 
-```
-rust-agent-platform/src/
-├── core/             # Agent, Tool, Session, Provider (trait)
-├── providers/         # 6 LLM providers: openai, anthropic, deepseek, ollama, minimax, custom
-├── tools/            # Built-in tools: bash, read, write, edit, grep
-├── tui/              # ratatui-based terminal UI
-├── platform/         # Boulder (SQLite TODO), Hooks (52), Skills (SKILL.md), Intent Gate
-├── orchestration/    # TaskScheduler, MessageBus, multi-agent
-└── integration/mcp/  # MCP client
-```
+**Branch:** `feat/tui-refactor`
+**Worktree:** `.worktrees/feat-tui-refactor/`
 
-## Key Conventions
-
-### Intent Gate (routing)
-`IntentCategory` enum: Research, Implementation, Investigation, Evaluation, Fix, OpenEnded, Trivial.
-Routes to: `explore/librarian → synthesize`, `plan → delegate`, `explore → report`, etc.
-
-### Skill Loading
-Skills defined in `SKILL.md` files with YAML frontmatter (`name`, `description`, `scope: Global|Project|User`).
-Loaded via `SkillLoader::load_skill(path)`.
-
-### Hook System
-52 hooks defined in `platform/hooks/`. Hook lifecycle events for agent orchestration.
-Use `HookRegistry` to register callbacks.
-
-### Boulder (TODO)
-SQLite-backed TODO persistence via `BoulderStore`. Uses temp directories for test isolation.
+项目架构重构，尤其是 TUI 的重构。重构后的 TUI 采用 MVC 模式：
+- `tui/app_controller.rs` — 主控制器
+- `tui/components/` — UI 组件（input_area, message_list, scroll_bar, status_bar）
+- `tui/state/` — 状态管理（action, app_context, view_state）
+- `tui/views/` — 视图层（chat_view, config_view, debug_view）
 
 ## Dev Notes
 
@@ -52,3 +28,41 @@ SQLite-backed TODO persistence via `BoulderStore`. Uses temp directories for tes
 - **No custom linting**: Uses default `cargo clippy` / `cargo fmt`
 - **Logging**: `tracing` + `tracing-subscriber` → stderr (no log files unless `--debug`)
 - **Session files**: `session*.md` in root are ignored by `.gitignore`
+
+## Recommended Skills
+
+When working on this project, use these skills to ensure consistent quality:
+
+### Rust Development
+| Skill | When to Use |
+|-------|-------------|
+| `rust` | Any Rust code writing - safety, performance, async patterns |
+| `rust-systems-programming` | Complex concurrency, async runtime, memory management |
+
+### Workflow
+| Skill | When to Use |
+|-------|-------------|
+| `brainstorming` | **Before any creative work** - adding features, components, modifying behavior |
+| `using-git-worktrees` | Before starting feature work - creates isolated workspace |
+| `writing-plans` | Before multi-step implementation tasks |
+| `subagent-driven-development` | Executing plans with independent parallel tasks |
+| `verification-before-completion` | **Before commits or PRs** - run verification commands |
+
+### Debugging & Testing
+| Skill | When to Use |
+|-------|-------------|
+| `systematic-debugging` | **When encountering bugs** - follow structured debugging |
+| `test-driven-development` | Before writing implementation code |
+| `code-refactoring-refactor-clean` | When refactoring for Clean Code / SOLID principles |
+| `refactor` | General refactoring tasks |
+
+### Code Quality
+| Skill | When to Use |
+|-------|-------------|
+| `receiving-code-review` | When receiving code review feedback |
+| `requesting-code-review` | Before merging or completing features |
+
+### Documentation
+| Skill | When to Use |
+|-------|-------------|
+| `readme-writer` | When writing or revising README files |

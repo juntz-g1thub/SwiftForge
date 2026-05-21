@@ -1,16 +1,8 @@
 # FASTCODE
 
-## Active Project: Rust Programming Agent Platform (TUI Agent Platform)
+## Project
 
-**Context:** Rust-based TUI agent platform with streaming LLM support, tool calling, and debug panel.
-
----
-
-## Current Status
-
-**Branch:** `feature/rust-agent-phase2` (worktree: `.worktrees/rust-agent-phase2/`)
-**Build:** ✅ Compiles successfully, no compile errors
-**Last Updated:** 2026-05-18
+Rust-based TUI agent platform with streaming LLM support, tool calling, and debug panel.
 
 ---
 
@@ -23,14 +15,14 @@ rust-agent-platform/src/
 ├── core/                      # Core types (Agent, Tool, Session, Provider)
 ├── tools/                     # Built-in tools (bash, read, write, edit, grep)
 ├── tui/                       # Terminal UI (ratatui-based)
-│   ├── app.rs                 # Main TUI application (1102 lines)
-│   ├── config.rs              # Configuration management
-│   ├── components.rs          # UI components
-│   └── input.rs               # Input handling
+│   ├── app_controller.rs      # Main controller
+│   ├── components/            # UI components (input_area, message_list, scroll_bar, status_bar)
+│   ├── state/                 # State management (action, app_context, view_state)
+│   └── views/                 # Views (chat_view, config_view, debug_view)
 ├── providers/                 # LLM providers
 │   ├── openai.rs              # OpenAI GPT models
 │   ├── anthropic.rs           # Anthropic Claude models
-│   ├── deepseek.rs            # DeepSeek V4 (with streaming + thinking)
+│   ├── deepseek.rs            # DeepSeek models
 │   ├── ollama.rs              # Ollama local models
 │   ├── minimax.rs             # MiniMax models
 │   └── custom.rs              # Custom/provider
@@ -42,7 +34,6 @@ rust-agent-platform/src/
 │   ├── intent_gate.rs         # Intent classification
 │   └── category.rs            # Category definitions
 ├── orchestration/             # Multi-agent orchestration
-│   ├── agent.rs               # Agent orchestration
 │   ├── scheduler.rs           # Task scheduler
 │   └── message_bus.rs         # Message bus
 └── integration/              # External integrations
@@ -51,48 +42,22 @@ rust-agent-platform/src/
 
 ---
 
-## Accomplished ✅
+## Key Conventions
 
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Project Scaffolding | ✅ | Full module structure |
-| Provider Abstraction | ✅ | 6 providers with stream_chat |
-| Tool System | ✅ | bash, read, write, edit, grep |
-| TUI Framework | ✅ | ratatui 0.26, 1102 lines |
-| Streaming Output | ✅ | stream_ui channel |
-| Debug Panel | ✅ | debug_tx channel, ↑↓ scroll |
-| --debug Flag | ✅ | Debug window toggle |
-| Log Files | ✅ | Timestamped filenames |
-| Tag Format | ✅ | `<thinking>`, `<content>`, `<tool>` |
-| Boulder Persistence | ✅ | SQLite storage |
-| Hook System | ✅ | 52 hooks implemented |
-| Skill Loading | ✅ | SKILL.md format |
-| Agent Orchestration | ✅ | Scheduler + MessageBus |
-| MCP Client | ✅ | Protocol + client框架 |
-| Intent Gate | ✅ | Category classification |
-| Eprintln Removal | ✅ | All replaced with `let _ =` |
+### Intent Gate (routing)
+`IntentCategory` enum: Research, Implementation, Investigation, Evaluation, Fix, OpenEnded, Trivial.
+Routes to: `explore/librarian → synthesize`, `plan → delegate`, `explore → report`, etc.
 
----
+### Skill Loading (Project Feature)
+Skills defined in `SKILL.md` files with YAML frontmatter (`name`, `description`, `scope: Global|Project|User`).
+Loaded via `SkillLoader::load_skill(path)`.
 
-## DeepSeek V4 Streaming
+### Hook System
+52 hooks defined in `platform/hooks/`. Hook lifecycle events for agent orchestration.
+Use `HookRegistry` to register callbacks.
 
-**Model:** `deepseek-v4-pro`
-
-### Key Behaviors Discovered
-
-1. **Thinking Content**: Returns in `delta.reasoning_content` field
-2. **Tool Calls**: Returns as text tags `<tool>bash</tool>` (not structured `tool_calls`)
-3. **Streaming**: Requires `thinking: { type: "enabled" }` and `reasoning_effort: "high"`
-4. **Tool Call Feedback**: Must send `reasoning_content` back with tool results
-
-### Streaming Architecture
-
-```rust
-// DeepSeekProvider::stream_chat
-- Extracts reasoning_content → wraps with [thinking] prefix
-- Extracts content delta → outputs directly
-- Channels: stream_ui for content, debug_tx for debug panel
-```
+### Boulder (TODO)
+SQLite-backed TODO persistence via `BoulderStore`. Uses temp directories for test isolation.
 
 ---
 
@@ -106,23 +71,12 @@ rust-agent-platform/src/
 
 ---
 
-## Remaining Tasks
-
-| Task | Priority | Status |
-|------|----------|--------|
-| DeepSeek V4 tool_calls text format parsing | HIGH | ❌ Pending |
-| Accumulate reasoning_content for tool feedback | HIGH | ❌ Pending |
-| Full end-to-end streaming verification | HIGH | ❌ Pending |
-| Tool call execution in agent loop | HIGH | ❌ Pending |
-| MCP server real HTTP communication | MEDIUM | 🔄 Partial |
-
----
-
 ## Build & Run
 
 ```bash
-# Build
 cd rust-agent-platform
+
+# Build
 cargo build --bin ragent
 
 # Run without debug
@@ -137,21 +91,6 @@ cargo test
 
 ---
 
-## Git Workflow
-
-```bash
-# Current worktree
-git worktree list
-# .worktrees/rust-agent-phase2/rust-agent-platform  feature/rust-agent-phase2
-# .worktrees/rust-agent-platform/rust-agent-platform  feature/rust-agent-platform
-
-# Commit in current worktree
-git add -A && git commit -m "your message"
-git push -u origin feature/rust-agent-phase2
-```
-
----
-
 ## Tech Stack
 
 - **Agent Core:** Custom Rust (async_trait, tokio)
@@ -160,13 +99,3 @@ git push -u origin feature/rust-agent-phase2
 - **Storage:** SQLite (rusqlite)
 - **HTTP:** reqwest 0.12
 - **Logging:** tracing + tracing-subscriber
-
----
-
-## Phase History
-
-| Phase | Date | Status |
-|-------|------|--------|
-| Phase 1: Core Infrastructure | 2026-05-04 | ✅ Complete |
-| Phase 2: Platform Layer | 2026-05-11 | ✅ Complete |
-| Phase 3: TUI + Streaming + Tool Calling | 2026-05-18 | 🔄 In Progress |
