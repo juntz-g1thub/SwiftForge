@@ -1,4 +1,4 @@
-# 文档体系规范
+# 文档体系
 
 > 版本: 1.0
 > 日期: 2026-05-20
@@ -21,24 +21,25 @@
 
 ```
 docs/
-├── standards/              # L1 规范/标准
+├── README.md              # 本文件 - 文档体系说明
+├── standards/            # L1 规范/标准
 │   ├── YYYY-MM-DD-coding-standards.md
 │   └── YYYY-MM-DD-git-conventions.md
 │
-├── architecture/           # L2 架构/接口
+├── architecture/         # L2 架构/接口
 │   ├── YYYY-MM-DD-platform-architecture.md
 │   └── YYYY-MM-DD-<module>-architecture.md
 │
-├── specs/                  # L3 设计/Spec (brainstorming skill 输出)
+├── specs/                # L3 设计/Spec (brainstorming skill 输出)
 │   └── YYYY-MM-DD-<feature>-design.md
 │
-├── records/                # L4 记录/分析
-│   ├── bugs/
-│   │   └── bug-YYYY-MM-DD-<issue>.md
-│   ├── decisions/
-│   │   └── decision-YYYY-MM-DD-<topic>.md
-│   └── postmortems/
-│       └── postmortem-YYYY-MM-DD-<incident>.md
+└── records/             # L4 记录/分析
+    ├── bugs/
+    │   └── bug-YYYY-MM-DD-<issue>.md
+    ├── decisions/
+    │   └── decision-YYYY-MM-DD-<topic>.md
+    └── postmortems/
+        └── postmortem-YYYY-MM-DD-<incident>.md
 ```
 
 ---
