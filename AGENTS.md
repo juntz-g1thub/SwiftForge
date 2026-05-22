@@ -11,6 +11,31 @@
 
 > ⚠️ 所有 git 操作必须由用户手动执行，切勿自动运行 git 命令。
 
+## Documentation System
+
+**文档根目录**: `docs/`
+**文档规范**: `docs/README.md`
+
+### 目录结构
+
+```
+docs/
+├── README.md              # 文档体系说明
+├── standards/             # L1 规范/标准
+├── architecture/          # L2 架构/接口
+├── specs/                 # L3 设计/Spec
+└── records/               # L4 记录/分析
+```
+
+### 关键规则
+
+- **L1/L2 文档**: 需要用户 explicit approve
+- **L3 文档**: 通过 brainstorming skill 生成
+- **L4 文档**: 无需审批
+
+> ⚠️ **所有工作请在 worktree 中进行，所有文档请在 worktree 的 `docs/` 中查阅**
+> 除非用户明确提示直接查阅 main 分支的文件，否则一律在 worktree 中操作文件
+
 ## Current Focus
 
 **Branch:** `feat/tui-refactor`
