@@ -481,7 +481,7 @@ pub trait ToolCallingProvider: Send + Sync {
 - `content` → 用户可见内容
 - `tool_calls` → JSON数组格式（与其他 Provider 一致）
 
-> **注意**: DeepSeek 原实现中在流式输出时手动添加 `<thinking>`, `<content>`, `<tool_call>` 等文本标签用于前端区分显示，这些标签应删除，改为直接使用标准 JSON 格式，通过 `reasoning_content` / `content` / `tool_calls` 字段区分。
+> **注意**: DeepSeek 原实现中在流式输出时手动添加 `<thinking>`, `<content>`, `<tool_call>` 等文本标签用于前端区分显示，这些标签已删除 (T11 ✅)，改为直接使用标准 JSON 格式，通过 `reasoning_content` / `content` / `tool_calls` 字段区分。
 
 ---
 
@@ -594,23 +594,9 @@ pub struct ChatViewState {
     pub current_model: String,
     pub reasoning_collapsed: bool,                 // 思考区域是否折叠
 }
-
-pub enum ConfigViewState {
-    SelectProvider,
-    Editing(ProviderEditStage),
-    FetchingModels { error: Option<String> },
-    SelectModel(Vec<String>),
-}
-
-pub enum ProviderEditStage {
-    SelectProvider,
-    ApiKey,
-    Model,
-    BaseUrl,
-    CustomName,
-    CustomUrl,
-}
 ```
+
+> **实现状态 (T12)**: ChatViewState 已更新使用 Vec<MessageBlock>，reasoning_collapsed 字段已添加。T12 ✅ 完成。
 
 ### 6.5 AppContext 和 UIState
 

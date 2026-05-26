@@ -63,23 +63,103 @@ impl ChatView {
         *cursor_pos = target_char_pos;
     }
 
+    fn render_reasoning_block(
+        &self,
+        f: &mut Frame,
+        area: Rect,
+        reasoning: &str,
+        is_streaming: bool,
+    ) {
+        let title = if is_streaming {
+            "🌙 DeepSeek Reasoning..."
+        } else {
+            "🌙 DeepSeek Reasoning ✓"
+        };
+
+        let border_style = Style::new().magenta();
+
+        let block = Block::default()
+            .title(title)
+            .borders(Borders::ALL)
+            .border_style(border_style)
+            .style(Style::new().on_green().black());
+
+        let inner_area = block.inner(area);
+        f.render_widget(block, area);
+
+        let lines: Vec<Line> = reasoning.lines().map(Line::from).collect();
+
+        let paragraph = Paragraph::new(Text::from(lines));
+
+        f.render_widget(paragraph, inner_area);
+    }
+
+    fn render_tool_call_block(&self, f: &mut Frame, area: Rect, name: &str, arguments: &str) {
+        let title = format!("🔧 Tool Call: {}", name);
+
+        let border_style = Style::new().cyan();
+
+        let block = Block::default()
+            .title(title)
+            .borders(Borders::ALL)
+            .border_style(border_style)
+            .style(Style::new().on_blue().black());
+
+        let inner_area = block.inner(area);
+        f.render_widget(block, area);
+
+        let content = format!("{}\n\nResult: ...", arguments);
+        let lines: Vec<Line> = content.lines().map(Line::from).collect();
+
+        let paragraph = Paragraph::new(Text::from(lines));
+        f.render_widget(paragraph, inner_area);
+    }
+
     fn render_messages(&mut self, f: &mut Frame, area: Rect, ui_state: &UIState) {
         let mut lines: Vec<Line> = Vec::new();
 
-        for (role, content) in &self.state.messages {
-            let role_style = match role.as_str() {
+        for msg in &self.state.messages {
+            let role_style = match msg.role.as_str() {
                 "user" => Style::new().green().bold(),
                 "assistant" => Style::new().cyan().bold(),
                 "system" => Style::new().yellow().bold(),
                 "error" => Style::new().red().bold(),
                 _ => Style::new().white(),
             };
-            let role_display = format!("[{} {}]", role, self.state.current_model);
+
+            let role_display = format!("[{} {}]", msg.role, self.state.current_model);
             lines.push(Line::from(Span::styled(
                 format!("{}: ", role_display),
                 role_style,
             )));
-            lines.push(Line::from(Span::raw(content.clone())));
+
+            if let Some(ref reasoning) = msg.reasoning {
+                lines.push(Line::from(Span::styled(
+                    "🌙 [Reasoning collapsed - press to expand]",
+                    Style::new().magenta(),
+                )));
+            }
+
+            for tc in &msg.tool_calls {
+                lines.push(Line::from(Span::styled(
+                    format!("🔧 Tool: {} - {}", tc.name, tc.arguments),
+                    Style::new().cyan(),
+                )));
+            }
+
+            for tr in &msg.tool_results {
+                let success_style = if tr.success {
+                    Style::new().green()
+                } else {
+                    Style::new().red()
+                };
+                lines.push(Line::from(Span::styled(
+                    format!("Result: {}", tr.output),
+                    success_style,
+                )));
+            }
+
+            lines.push(Line::from(Span::raw(msg.content.clone())));
         }
 
         if let Ok(streaming) = ui_state.streaming_text.lock() {
@@ -314,6 +394,10 @@ impl View for ChatView {
                     ))),
                     _ => None,
                 },
+                (KeyCode::Char('r'), _) => {
+                    self.state.reasoning_collapsed = !self.state.reasoning_collapsed;
+                    None
+                }
                 (KeyCode::Char(c), _) => {
                     self.state.input.push(c);
                     self.state.cursor_pos += 1;

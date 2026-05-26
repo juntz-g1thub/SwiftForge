@@ -5,5 +5,6 @@ mod view_state;
 pub use action::{Action, ViewStateKind};
 pub use app_context::{AgentCommand, AppContext, UIState};
 pub use view_state::{
-    ChatViewState, ConfigViewState, DebugViewState, ProviderEditStage, ViewState,
+    ChatViewState, ConfigViewState, DebugViewState, MessageBlock, MessageStatus, ProviderEditStage,
+    ToolCallBlock, ToolResultBlock, ViewState,
 };

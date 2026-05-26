@@ -300,4 +300,30 @@ fn render_message(&mut self, msg: &MessageBlock, area: Rect) {
 
 ---
 
+## 九、实现状态
+
+> 更新日期: 2026-05-25
+
+### 已完成
+
+| 任务 | 文件 | 状态 | 说明 |
+|------|------|------|------|
+| 数据结构定义 | `tui/state/view_state.rs` | ✅ | MessageBlock, ToolCallBlock, ToolResultBlock, MessageStatus |
+| ChatViewState 更新 | `tui/state/view_state.rs` | ✅ | messages: Vec<MessageBlock>, reasoning_collapsed: bool |
+| 类型导出 | `tui/state/mod.rs` | ✅ | 导出新类型 |
+| render_reasoning_block | `tui/views/chat_view.rs` | ✅ | 紫色边框绿色背景 |
+| render_tool_call_block | `tui/views/chat_view.rs` | ✅ | 青色边框蓝色背景 |
+| render_messages 更新 | `tui/views/chat_view.rs` | ✅ | 使用 MessageBlock 格式 |
+| 折叠交互 | `tui/views/chat_view.rs` | ✅ | 按 r 键切换 reasoning_collapsed |
+
+### 待后续完成
+
+| 任务 | 状态 | 说明 |
+|------|------|------|
+| 完整的流式解析 | 📋 待实现 | Agent 响应到 MessageBlock 的完整映射 |
+| 折叠 UI 优化 | 📋 待实现 | 当前 placeholder 显示，需完善 |
+| Tool Result 渲染 | 📋 待实现 | render_tool_result_block 方法 |
+
+---
+
 *文档状态: 待审批*

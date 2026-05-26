@@ -30,8 +30,8 @@
 | T8 | DeepSeek reasoning 累积 | reasoning_history 管理和反馈 | 高 | 📋 规划中 | - |
 | T9 | Session 集成 | Session 管理器与 Agent 集成 | 中 | 📋 规划中 | - |
 | T10 | Orchestration 集成 | TaskScheduler/MessageBus 与 Agent 集成 | 低 | 📋 规划中 | - |
-| T11 | DeepSeek 文本标签移除 | 删除 `stream_chat_with_tools` 中的 `<thinking>`, `<content>`, `<tool_call>` 文本标签，使用标准 JSON 格式 | 中 | 📋 规划中 | - |
-| T12 | TUI 分栏显示重构 | 实现深度思考、工具调用、内容的三栏分显示，支持折叠/展开交互 | 高 | 📋 规划中 | [tui-message-display-design](../specs/2026-05-25-tui-message-display-design.md) |
+| T11 | DeepSeek 文本标签移除 | 删除 `stream_chat_with_tools` 中的 `<thinking>`, `<content>`, `<tool_call>` 文本标签，使用标准 JSON 格式 | 中 | ✅ 已完成 | - |
+| T12 | TUI 分栏显示重构 | 实现深度思考、工具调用、内容的三栏分显示，支持折叠/展开交互 | 高 | ✅ 已完成 | [tui-message-display-design](../specs/2026-05-25-tui-message-display-design.md) |
 
 ### 1.2 任务详情
 
@@ -227,7 +227,13 @@ reasoning_history: Arc<Mutex<Vec<String>>>
 
 **修改位置**: `providers/deepseek.rs` 的 `stream_chat_with_tools` 方法
 
-**状态**: 📋 规划中
+**实现内容**:
+- ✅ 删除 `<thinking>`, `<content>`, `<tool_call>` 文本标签
+- ✅ `stream_chat()` 直接传递 reasoning_content 和 content delta
+- ✅ `stream_chat_with_tools()` 直接解析 delta.tool_calls 并发送 JSON
+- ✅ `agent.rs` 移除文本标签解析逻辑，直接解析 JSON
+
+**状态**: ✅ 已完成
 
 ---
 
@@ -250,7 +256,13 @@ reasoning_history: Arc<Mutex<Vec<String>>>
 - `tui/state/view_state.rs` - ChatViewState/MessageBlock 结构
 - `tui/views/chat_view.rs` - render_reasoning_block/render_tool_call_block 方法
 
-**状态**: 📋 规划中
+**实现内容**:
+- ✅ MessageBlock, ToolCallBlock, ToolResultBlock, MessageStatus 数据结构
+- ✅ ChatViewState.messages 升级为 Vec<MessageBlock>
+- ✅ reasoning_collapsed 字段支持折叠
+- ✅ render_reasoning_block() / render_tool_call_block() 渲染方法
+
+**状态**: ✅ 已完成
 
 ---
 
@@ -280,11 +292,14 @@ reasoning_history: Arc<Mutex<Vec<String>>>
 - ✅ AppController 中心控制器
 - ✅ View trait + ChatView/ConfigView
 - ✅ AppContext/UIState/ViewState 分离
+- ✅ T12 分栏显示数据结构 (MessageBlock)
+- ✅ T12 render_reasoning_block/render_tool_call_block
 
 **待完成**:
-- 📋 DebugPanel 移除 (T2)
+- 📋 DebugPanel 移除 (T2) - 依赖 Log 模块
 - 📋 Log 模块集成 (T1)
-- 📋 分栏显示重构 (T12)
+- 📋 完整的流式输出到 MessageBlock 映射
+- 📋 折叠 UI 优化
 
 **结论**: MVC重构完成，DebugPanel由Log替代
 

@@ -286,53 +286,22 @@ impl Agent {
         let on_chunk_clone = on_chunk.clone();
         let tool_calls_json = Arc::new(std::sync::Mutex::new(Vec::new()));
         let tool_calls_json_clone = tool_calls_json.clone();
-        let in_tool_call = Arc::new(std::sync::Mutex::new(false));
-        let in_tool_call_clone = in_tool_call.clone();
-        let current_tool_call = Arc::new(std::sync::Mutex::new(String::new()));
-        let current_tool_call_clone = current_tool_call.clone();
 
         let on_chunk_wrapper = Box::new(move |chunk: String| {
-            let has_tool_start = chunk.starts_with("<tool_call>");
-            let has_tool_end = chunk.contains("</tool_call>");
-            let in_tool = *in_tool_call_clone.lock().unwrap();
-
-            if has_tool_start {
-                current_tool_call_clone.lock().unwrap().clear();
-                current_tool_call_clone.lock().unwrap().push_str(&chunk);
-                *in_tool_call_clone.lock().unwrap() = true;
-                if has_tool_end {
-                    let full = current_tool_call_clone.lock().unwrap().clone();
-                    if let Some(json_start) = full.find("{") {
-                        let json_end = full.rfind("}").map(|i| i+1).unwrap_or(full.len());
-                        let json_str = full[json_start..json_end].trim();
-                        if !json_str.is_empty() && json_str.starts_with("{") {
-                            if let Ok(json) = serde_json::from_str::<serde_json::Value>(json_str) {
-                                tool_calls_json_clone.lock().unwrap().push(json);
-                            }
-                        }
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&chunk) {
+                if let Some(name) = json.get("name").and_then(|n| n.as_str()) {
+                    if let Some(arguments) = json.get("arguments").and_then(|a| a.as_str()) {
+                        let tc_json = serde_json::json!({
+                            "name": name,
+                            "arguments": arguments
+                        });
+                        tool_calls_json_clone.lock().unwrap().push(tc_json);
+                        return;
                     }
-                    current_tool_call_clone.lock().unwrap().clear();
-                    *in_tool_call_clone.lock().unwrap() = false;
                 }
-            } else if in_tool {
-                current_tool_call_clone.lock().unwrap().push_str(&chunk);
-                if has_tool_end {
-                    let full = current_tool_call_clone.lock().unwrap().clone();
-                    if let Some(json_start) = full.find("{") {
-                        let json_end = full.rfind("}").map(|i| i+1).unwrap_or(full.len());
-                        let json_str = full[json_start..json_end].trim();
-                        if !json_str.is_empty() && json_str.starts_with("{") {
-                            if let Ok(json) = serde_json::from_str::<serde_json::Value>(json_str) {
-                                tool_calls_json_clone.lock().unwrap().push(json);
-                            }
-                        }
-                    }
-                    current_tool_call_clone.lock().unwrap().clear();
-                    *in_tool_call_clone.lock().unwrap() = false;
-                }
-            } else {
-                accumulated_clone.lock().unwrap().push_str(&chunk);
             }
+
+            accumulated_clone.lock().unwrap().push_str(&chunk);
 
             if let Ok(mut cb) = on_chunk_clone.lock() {
                 cb(chunk.clone());
