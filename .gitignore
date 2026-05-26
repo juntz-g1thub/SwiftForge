@@ -12,6 +12,7 @@ Thumbs.db
 
 # Session files
 session*.md
+AGENTS.md
 
 # Rust build
 target/
