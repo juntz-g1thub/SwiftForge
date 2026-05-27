@@ -1,6 +1,7 @@
 mod views;
 mod state;
 mod components;
+mod task;
 mod config;
 
 pub use config::{AppConfig, ConfigManager};
