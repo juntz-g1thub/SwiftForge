@@ -32,3 +32,4 @@ dirs = "5"
 regex = "1"
 clap = { version = "4", features = ["derive"] }
 chrono = "0.4"
+uuid = { version = "1", features = ["v4"] }

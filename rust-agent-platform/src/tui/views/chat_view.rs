@@ -14,7 +14,6 @@ use ratatui::style::Style;
 pub struct ChatView {
     pub state: ChatViewState,
     scrollbar_state: ScrollbarState,
-    debug_scrollbar_state: ScrollbarState,
 }
 
 impl ChatView {
@@ -22,7 +21,6 @@ impl ChatView {
         Self {
             state: ChatViewState::new(provider, model),
             scrollbar_state: ScrollbarState::new(0),
-            debug_scrollbar_state: ScrollbarState::new(0),
         }
     }
 
@@ -225,115 +223,22 @@ impl ChatView {
         let status_para = Paragraph::new(status_text.as_str());
         f.render_widget(status_para, area);
     }
-
-    fn render_debug_panel(&mut self, f: &mut Frame, area: Rect, ui_state: &UIState) {
-        let messages: Vec<String> = if let Ok(guard) = ui_state.debug_messages.lock() {
-            guard.clone()
-        } else {
-            Vec::new()
-        };
-
-        let debug_lines: Vec<Line> = messages
-            .iter()
-            .flat_map(|msg| {
-                let wrapped = Self::wrap_text_to_width(msg, area.width as usize - 2);
-                wrapped.into_iter().map(Line::from).collect::<Vec<_>>()
-            })
-            .collect();
-
-        self.state.debug_content_height = debug_lines.len();
-        let visible_height = area.height as usize;
-
-        let max_scroll = if self.state.debug_content_height > visible_height {
-            self.state.debug_content_height - visible_height
-        } else {
-            0
-        };
-        if self.state.debug_scroll_offset > max_scroll {
-            self.state.debug_scroll_offset = max_scroll;
-        }
-        self.debug_scrollbar_state =
-            ScrollbarState::new(max_scroll).position(self.state.debug_scroll_offset);
-
-        let scrollable_debug_lines: Vec<Line> =
-            if self.state.debug_scroll_offset >= debug_lines.len() {
-                debug_lines.clone()
-            } else {
-                debug_lines[self.state.debug_scroll_offset..].to_vec()
-            };
-
-        let debug_para = Paragraph::new(Text::from(scrollable_debug_lines))
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title("Debug Log (↑↓ scroll)"),
-            )
-            .style(Style::new().red());
-
-        f.render_widget(debug_para, area);
-
-        let scrollbar_area = area.inner(&Margin {
-            vertical: 1,
-            horizontal: 0,
-        });
-        f.render_stateful_widget(
-            Scrollbar::new(ScrollbarOrientation::VerticalRight),
-            scrollbar_area,
-            &mut self.debug_scrollbar_state,
-        );
-    }
-
-    fn wrap_text_to_width(text: &str, width: usize) -> Vec<String> {
-        if text.is_empty() {
-            return vec![String::new()];
-        }
-        let mut lines = Vec::new();
-        let mut current = String::new();
-        let mut current_width = 0;
-        for ch in text.chars() {
-            let ch_width = Self::display_width(ch);
-            if current_width + ch_width > width {
-                if !current.is_empty() {
-                    lines.push(current.clone());
-                    current.clear();
-                    current_width = 0;
-                }
-            }
-            current.push(ch);
-            current_width += ch_width;
-        }
-        if !current.is_empty() {
-            lines.push(current);
-        }
-        if lines.is_empty() {
-            lines.push(String::new());
-        }
-        lines
-    }
 }
 
 impl View for ChatView {
     fn render(&mut self, f: &mut Frame, area: Rect, ctx: &AppContext, ui_state: &UIState) {
-        let show_debug = ctx.debug_log_path.is_some();
-        let debug_height = if show_debug { 8 } else { 0 };
-
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Min(1),
                 Constraint::Length(3),
                 Constraint::Length(1),
-                Constraint::Length(debug_height),
             ])
             .split(area);
 
         self.render_messages(f, chunks[0], ui_state);
         self.render_input(f, chunks[1]);
         self.render_status(f, chunks[2]);
-
-        if show_debug && debug_height > 0 {
-            self.render_debug_panel(f, chunks[3], ui_state);
-        }
     }
 
     fn handle_key(&mut self, key: KeyEvent, ctx: &AppContext) -> Option<Action> {
@@ -359,8 +264,6 @@ impl View for ChatView {
                 _ => None,
             }
         } else {
-            let show_debug = ctx.debug_log_path.is_some();
-
             match (key.code, key.modifiers) {
                 (KeyCode::Char(c), KeyModifiers::CONTROL) => match c {
                     'q' | 'Q' => Some(Action::Quit),
@@ -411,25 +314,12 @@ impl View for ChatView {
                     None
                 }
                 (KeyCode::Up, _) => {
-                    if show_debug && self.state.debug_content_height > 0 {
-                        if self.state.debug_scroll_offset > 0 {
-                            self.state.debug_scroll_offset -= 1;
-                        }
-                        return Some(Action::ScrollDebugUp);
-                    }
                     if self.state.scroll_offset > 0 {
                         self.state.scroll_offset -= 1;
                     }
                     Some(Action::ScrollUp)
                 }
                 (KeyCode::Down, _) => {
-                    if show_debug {
-                        let max_debug_scroll = self.state.debug_content_height.saturating_sub(1);
-                        if self.state.debug_scroll_offset < max_debug_scroll {
-                            self.state.debug_scroll_offset += 1;
-                        }
-                        return Some(Action::ScrollDebugDown);
-                    }
                     let max_scroll = self.state.content_height.saturating_sub(1);
                     if self.state.scroll_offset < max_scroll {
                         self.state.scroll_offset += 1;
