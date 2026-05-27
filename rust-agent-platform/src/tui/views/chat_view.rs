@@ -119,7 +119,8 @@ impl ChatView {
         let mut lines: Vec<Line> = Vec::new();
 
         for msg in &self.state.messages {
-            let role_style = match msg.role.as_str() {
+            let (role, content) = msg;
+            let role_style = match role.as_str() {
                 "user" => Style::new().green().bold(),
                 "assistant" => Style::new().cyan().bold(),
                 "system" => Style::new().yellow().bold(),
@@ -127,39 +128,13 @@ impl ChatView {
                 _ => Style::new().white(),
             };
 
-            let role_display = format!("[{} {}]", msg.role, self.state.current_model);
+            let role_display = format!("[{} {}]", role, self.state.current_model);
             lines.push(Line::from(Span::styled(
                 format!("{}: ", role_display),
                 role_style,
             )));
 
-            if let Some(ref reasoning) = msg.reasoning {
-                lines.push(Line::from(Span::styled(
-                    "🌙 [Reasoning collapsed - press to expand]",
-                    Style::new().magenta(),
-                )));
-            }
-
-            for tc in &msg.tool_calls {
-                lines.push(Line::from(Span::styled(
-                    format!("🔧 Tool: {} - {}", tc.name, tc.arguments),
-                    Style::new().cyan(),
-                )));
-            }
-
-            for tr in &msg.tool_results {
-                let success_style = if tr.success {
-                    Style::new().green()
-                } else {
-                    Style::new().red()
-                };
-                lines.push(Line::from(Span::styled(
-                    format!("Result: {}", tr.output),
-                    success_style,
-                )));
-            }
-
-            lines.push(Line::from(Span::raw(msg.content.clone())));
+            lines.push(Line::from(Span::raw(content.clone())));
         }
 
         if let Ok(streaming) = ui_state.streaming_text.lock() {
@@ -390,14 +365,10 @@ impl View for ChatView {
                 (KeyCode::Char(c), KeyModifiers::CONTROL) => match c {
                     'q' | 'Q' => Some(Action::Quit),
                     's' | 'S' => Some(Action::SwitchView(crate::tui::ViewState::Config(
-                        crate::tui::ConfigViewState::new(),
+                        crate::tui::ConfigContext::default(),
                     ))),
                     _ => None,
                 },
-                (KeyCode::Char('r'), _) => {
-                    self.state.reasoning_collapsed = !self.state.reasoning_collapsed;
-                    None
-                }
                 (KeyCode::Char(c), _) => {
                     self.state.input.push(c);
                     self.state.cursor_pos += 1;

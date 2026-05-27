@@ -1,25 +1,27 @@
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Margin, Rect},
-    style::{Color, Style, Stylize},
+    style::{Color, Style},
     text::{Line, Text},
     widgets::{Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
     Frame,
 };
 
-use crate::tui::state::{Action, AppContext, DebugViewState, UIState};
+use crate::tui::state::{Action, AppContext, UIState};
 use crate::tui::views::View;
 
 pub struct DebugView {
-    pub state: DebugViewState,
     scrollbar_state: ScrollbarState,
+    scroll_offset: usize,
+    content_height: usize,
 }
 
 impl DebugView {
     pub fn new() -> Self {
         Self {
-            state: DebugViewState::new(),
             scrollbar_state: ScrollbarState::new(0),
+            scroll_offset: 0,
+            content_height: 0,
         }
     }
 }
@@ -37,23 +39,23 @@ impl View for DebugView {
             Vec::new()
         };
 
-        self.state.content_height = messages.len();
+        self.content_height = messages.len();
         let visible_height = chunks[0].height as usize;
 
-        let max_scroll = if self.state.content_height > visible_height {
-            self.state.content_height - visible_height
+        let max_scroll = if self.content_height > visible_height {
+            self.content_height - visible_height
         } else {
             0
         };
-        if self.state.scroll_offset > max_scroll {
-            self.state.scroll_offset = max_scroll;
+        if self.scroll_offset > max_scroll {
+            self.scroll_offset = max_scroll;
         }
-        self.scrollbar_state = ScrollbarState::new(max_scroll).position(self.state.scroll_offset);
+        self.scrollbar_state = ScrollbarState::new(max_scroll).position(self.scroll_offset);
 
-        let visible_lines: Vec<Line> = if self.state.scroll_offset >= messages.len() {
+        let visible_lines: Vec<Line> = if self.scroll_offset >= messages.len() {
             messages.iter().map(|m| Line::from(m.clone())).collect()
         } else {
-            messages[self.state.scroll_offset..]
+            messages[self.scroll_offset..]
                 .iter()
                 .map(|m| Line::from(m.clone()))
                 .collect()
@@ -86,20 +88,20 @@ impl View for DebugView {
     fn handle_key(&mut self, key: KeyEvent, _ctx: &AppContext) -> Option<Action> {
         match key.code {
             KeyCode::Up => {
-                if self.state.scroll_offset > 0 {
-                    self.state.scroll_offset -= 1;
+                if self.scroll_offset > 0 {
+                    self.scroll_offset -= 1;
                 }
                 Some(Action::ScrollDebugUp)
             }
             KeyCode::Down => {
-                let max_scroll = self.state.content_height.saturating_sub(1);
-                if self.state.scroll_offset < max_scroll {
-                    self.state.scroll_offset += 1;
+                let max_scroll = self.content_height.saturating_sub(1);
+                if self.scroll_offset < max_scroll {
+                    self.scroll_offset += 1;
                 }
                 Some(Action::ScrollDebugDown)
             }
             KeyCode::Esc => Some(Action::SwitchView(crate::tui::ViewState::Chat(
-                crate::tui::ChatViewState::new("deepseek", "deepseek-chat"),
+                crate::tui::ChatContext::new("deepseek", "deepseek-chat"),
             ))),
             _ => None,
         }

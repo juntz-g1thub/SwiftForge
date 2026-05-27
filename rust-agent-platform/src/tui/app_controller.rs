@@ -122,20 +122,13 @@ impl AppController {
             Action::SwitchView(view_state) => {
                 self.current_view.on_exit();
                 self.current_view = match view_state {
-                    ViewState::Chat(state) => {
-                        let mut view = ChatView::new(&state.current_provider, &state.current_model);
-                        view.state = state;
-                        Box::new(view)
+                    ViewState::Chat(ctx) => {
+                        Box::new(ChatView::new(&ctx.current_provider, &ctx.current_model))
                     }
-                    ViewState::Config(state) => {
+                    ViewState::Config(ctx) => {
                         let mut view = ConfigView::new();
-                        view.state = state;
+                        view.state = ctx;
                         Box::new(view)
-                    }
-                    ViewState::Debug(_) => {
-                        let provider = self.context.config.lock().unwrap().get_provider().to_string();
-                        let model = self.context.config.lock().unwrap().get_model(&provider).to_string();
-                        Box::new(ChatView::new(&provider, &model))
                     }
                 };
                 self.current_view.on_enter();
