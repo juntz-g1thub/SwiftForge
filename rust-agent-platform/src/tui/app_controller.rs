@@ -193,8 +193,6 @@ impl AppController {
         let (tx, rx) = mpsc::channel();
         *self.ui_state.response_receiver.lock().unwrap() = Some(rx);
 
-        self.ui_state.clear_streaming();
-
         let provider_name = self.context.config.lock().unwrap().get_provider().to_string();
         let api_key = self.context.config.lock().unwrap().get_api_key(&provider_name);
         let base_url = self.context.config.lock().unwrap().get_base_url(&provider_name);
@@ -206,8 +204,6 @@ impl AppController {
         let debug_messages = Arc::clone(&self.ui_state.debug_messages);
         let finalized_message = Arc::clone(&self.ui_state.finalized_message);
         let debug_tx = self.ui_state.debug_tx.clone();
-
-        let (debug_tx, _debug_rx) = mpsc::channel();
 
         runtime.spawn(async move {
             let model_opt = Some(model.clone());
@@ -252,13 +248,17 @@ impl AppController {
                         msgs.remove(0);
                     }
                 }
+                if let Ok(mut streaming) = streaming_text.lock() {
+                    *streaming = None;
+                }
             }
 
+            let debug_sender = debug_tx.lock().unwrap().take();
             let result = final_agent.run_agent_loop(
                 &msg,
                 5,
                 debug_path.map(|p| p.to_string_lossy().to_string()),
-                Some(debug_tx),
+                debug_sender,
                 Some(tx),
             ).await;
 
@@ -270,13 +270,9 @@ impl AppController {
                             msgs.remove(0);
                         }
                     }
-                    if let Ok(mut streaming) = streaming_text.lock() {
-                        if let Some(final_text) = streaming.take() {
-                            if !final_text.is_empty() {
-                                if let Ok(mut finalized) = finalized_message.lock() {
-                                    *finalized = Some(("assistant".to_string(), final_text));
-                                }
-                            }
+                    if !response.is_empty() {
+                        if let Ok(mut finalized) = finalized_message.lock() {
+                            *finalized = Some(("assistant".to_string(), response));
                         }
                     }
                 }
@@ -287,11 +283,11 @@ impl AppController {
                             msgs.remove(0);
                         }
                     }
-                    if let Ok(mut streaming) = streaming_text.lock() {
-                        let partial = streaming.take().unwrap_or_default();
-                        if let Ok(mut finalized) = finalized_message.lock() {
-                            *finalized = Some(("error".to_string(), format!("{} (partial: {})", e, partial)));
-                        }
+                    let partial = streaming_text.lock()
+                        .map(|mut s| s.take().unwrap_or_default())
+                        .unwrap_or_default();
+                    if let Ok(mut finalized) = finalized_message.lock() {
+                        *finalized = Some(("error".to_string(), format!("{} (partial: {})", e, partial)));
                     }
                 }
             }
