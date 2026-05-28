@@ -1,0 +1,10 @@
+[package]
+name = "swiftforge-tools"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+swiftforge-types = { path = "../swiftforge-types" }
+async-trait.workspace = true
+serde_json.workspace = true
+regex = "1"

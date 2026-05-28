@@ -1,0 +1,12 @@
+[package]
+name = "swiftforge-mcp"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+swiftforge-types = { path = "../swiftforge-types" }
+reqwest.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true

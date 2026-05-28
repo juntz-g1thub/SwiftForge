@@ -1,5 +1,13 @@
 [workspace]
-members = ["rust-agent-platform"]
+members = [
+    "libs/swiftforge-types",
+    "libs/swiftforge-task",
+    "libs/swiftforge-tools",
+    "libs/swiftforge-mcp",
+    "libs/swiftforge-hooks",
+    "libs/swiftforge-skill",
+    "swiftforge",
+]
 resolver = "2"
 
 [workspace.package]
@@ -20,3 +28,4 @@ async-trait = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 rusqlite = { version = "0.31", features = ["bundled"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }

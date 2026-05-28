@@ -1,0 +1,12 @@
+[package]
+name = "swiftforge-skill"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+swiftforge-types = { path = "../swiftforge-types" }
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+dirs = "5"

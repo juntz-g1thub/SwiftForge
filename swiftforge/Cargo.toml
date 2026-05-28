@@ -1,0 +1,43 @@
+[package]
+name = "swiftforge"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "rust_agent_platform"
+path = "src/lib.rs"
+
+[[bin]]
+name = "ragent"
+path = "src/main.rs"
+
+[dependencies]
+swiftforge-types = { path = "../libs/swiftforge-types" }
+swiftforge-task = { path = "../libs/swiftforge-task" }
+swiftforge-tools = { path = "../libs/swiftforge-tools" }
+swiftforge-mcp = { path = "../libs/swiftforge-mcp" }
+swiftforge-hooks = { path = "../libs/swiftforge-hooks" }
+swiftforge-skill = { path = "../libs/swiftforge-skill" }
+
+tokio.workspace = true
+tokio-stream.workspace = true
+futures.workspace = true
+tracing.workspace = true
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
+anyhow.workspace = true
+thiserror.workspace = true
+async-trait.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rusqlite.workspace = true
+
+ratatui = "0.26"
+crossterm = "0.27"
+pulldown-cmark = "0.10"
+reqwest.workspace = true
+dirs = "5"
+regex = "1"
+clap = { version = "4", features = ["derive"] }
+chrono = "0.4"
+uuid = { version = "1", features = ["v4"] }
