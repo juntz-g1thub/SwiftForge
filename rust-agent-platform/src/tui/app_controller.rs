@@ -206,6 +206,13 @@ impl AppController {
         let debug_tx = self.ui_state.debug_tx.clone();
 
         runtime.spawn(async move {
+            if let Some(ref path) = debug_path {
+                let timestamp = chrono::Local::now().format("%H:%M:%S%.3f");
+                let formatted = format!("[{}] SPAWN: task started, provider={}", timestamp, provider_name);
+                let _ = std::fs::OpenOptions::new().append(true).open(path)
+                    .and_then(|mut f| { use std::io::Write; writeln!(f, "{}", formatted) });
+            }
+
             let model_opt = Some(model.clone());
 
             let final_agent: Arc<Agent> = match provider_name.as_str() {
@@ -254,6 +261,13 @@ impl AppController {
             }
 
             let debug_sender = debug_tx.lock().unwrap().take();
+            if let Some(ref path) = debug_path {
+                let timestamp = chrono::Local::now().format("%H:%M:%S%.3f");
+                let tx_status = if debug_sender.is_some() { "Some" } else { "None" };
+                let formatted = format!("[{}] SPAWN: debug_sender={}, stream_tx=Some", timestamp, tx_status);
+                let _ = std::fs::OpenOptions::new().append(true).open(path)
+                    .and_then(|mut f| { use std::io::Write; writeln!(f, "{}", formatted) });
+            }
             let result = final_agent.run_agent_loop(
                 &msg,
                 5,
@@ -358,8 +372,23 @@ impl AppController {
                 if let Some(ref rx) = *receiver {
                     while let Ok(result) = rx.try_recv() {
                         match result {
-                            Ok(chunk) => chunks.push(chunk),
-                            Err(_e) => {}
+                            Ok(chunk) => {
+                                if let Some(ref path) = self.context.debug_log_path {
+                                    let timestamp = chrono::Local::now().format("%H:%M:%S%.3f");
+                                    let formatted = format!("[{}] CHUNK: received '{}'", timestamp, chunk);
+                                    let _ = std::fs::OpenOptions::new().append(true).open(path)
+                                        .and_then(|mut f| { use std::io::Write; writeln!(f, "{}", formatted) });
+                                }
+                                chunks.push(chunk);
+                            }
+                            Err(e) => {
+                                if let Some(ref path) = self.context.debug_log_path {
+                                    let timestamp = chrono::Local::now().format("%H:%M:%S%.3f");
+                                    let formatted = format!("[{}] CHUNK: error {:?}", timestamp, e);
+                                    let _ = std::fs::OpenOptions::new().append(true).open(path)
+                                        .and_then(|mut f| { use std::io::Write; writeln!(f, "{}", formatted) });
+                                }
+                            }
                         }
                     }
                 }
