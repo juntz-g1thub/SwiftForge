@@ -5,6 +5,7 @@ use crossterm::{event::{self, Event}, execute};
 use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use tokio::runtime::Builder;
+use tracing::{debug, error, info, trace};
 
 use crate::core::{Agent, AgentConfig, AgentRole, ToolRegistry};
 use crate::providers::{OpenAIProvider, AnthropicProvider, OllamaProvider, DeepSeekProvider, MiniMaxProvider, CustomProvider};
@@ -79,16 +80,19 @@ impl AppController {
         let backend = CrosstermBackend::new(stdout);
         let mut terminal = Terminal::new(backend)?;
 
-        self.log("Application started");
+        info!("Application started");
 
         loop {
+            trace!("loop: drawing");
             terminal.draw(|f| {
                 self.current_view.render(f, f.size(), &self.context, &self.ui_state);
             })?;
 
             if event::poll(Duration::from_millis(50))? {
                 if let Event::Key(key) = event::read()? {
+                    trace!("loop: key event {:?}", key);
                     if let Some(action) = self.current_view.handle_key(key, &self.context) {
+                        info!("Action: {:?}", action);
                         self.handle_action(action)?;
 
                         if self.should_quit {
@@ -188,6 +192,7 @@ impl AppController {
     }
 
     fn spawn_agent_task(&mut self, msg: String) {
+        trace!(msg_len = msg.len(), "SPAWN: spawn_agent_task called");
         let runtime = self.runtime.handle().clone();
 
         let (tx, rx) = mpsc::channel();
@@ -206,12 +211,7 @@ impl AppController {
         let debug_tx = self.ui_state.debug_tx.clone();
 
         runtime.spawn(async move {
-            if let Some(ref path) = debug_path {
-                let timestamp = chrono::Local::now().format("%H:%M:%S%.3f");
-                let formatted = format!("[{}] SPAWN: task started, provider={}", timestamp, provider_name);
-                let _ = std::fs::OpenOptions::new().append(true).open(path)
-                    .and_then(|mut f| { use std::io::Write; writeln!(f, "{}", formatted) });
-            }
+            debug!(provider = %provider_name, "SPAWN: task started");
 
             let model_opt = Some(model.clone());
 
@@ -261,13 +261,7 @@ impl AppController {
             }
 
             let debug_sender = debug_tx.lock().unwrap().take();
-            if let Some(ref path) = debug_path {
-                let timestamp = chrono::Local::now().format("%H:%M:%S%.3f");
-                let tx_status = if debug_sender.is_some() { "Some" } else { "None" };
-                let formatted = format!("[{}] SPAWN: debug_sender={}, stream_tx=Some", timestamp, tx_status);
-                let _ = std::fs::OpenOptions::new().append(true).open(path)
-                    .and_then(|mut f| { use std::io::Write; writeln!(f, "{}", formatted) });
-            }
+            trace!(debug_sender_is_some = debug_sender.is_some(), "SPAWN: before run_agent_loop");
             let result = final_agent.run_agent_loop(
                 &msg,
                 5,
@@ -360,6 +354,7 @@ impl AppController {
         };
 
         if let Some((role, content)) = finalized_msg {
+            debug!(role = %role, content_len = content.len(), "FINALIZED: adding to messages");
             if let Some(chat_view) = self.get_chat_view_mut() {
                 chat_view.state.add_message(&role, &content);
                 chat_view.state.is_streaming = false;
@@ -373,21 +368,11 @@ impl AppController {
                     while let Ok(result) = rx.try_recv() {
                         match result {
                             Ok(chunk) => {
-                                if let Some(ref path) = self.context.debug_log_path {
-                                    let timestamp = chrono::Local::now().format("%H:%M:%S%.3f");
-                                    let formatted = format!("[{}] CHUNK: received '{}'", timestamp, chunk);
-                                    let _ = std::fs::OpenOptions::new().append(true).open(path)
-                                        .and_then(|mut f| { use std::io::Write; writeln!(f, "{}", formatted) });
-                                }
+                                debug!(chunk_len = chunk.len(), "CHUNK: received");
                                 chunks.push(chunk);
                             }
                             Err(e) => {
-                                if let Some(ref path) = self.context.debug_log_path {
-                                    let timestamp = chrono::Local::now().format("%H:%M:%S%.3f");
-                                    let formatted = format!("[{}] CHUNK: error {:?}", timestamp, e);
-                                    let _ = std::fs::OpenOptions::new().append(true).open(path)
-                                        .and_then(|mut f| { use std::io::Write; writeln!(f, "{}", formatted) });
-                                }
+                                debug!("CHUNK: channel error: {:?}", e);
                             }
                         }
                     }
@@ -397,6 +382,7 @@ impl AppController {
         };
 
         if !streaming_chunks.is_empty() {
+            trace!(chunk_count = streaming_chunks.len(), "CHUNKS: adding to messages");
             if let Some(chat_view) = self.get_chat_view_mut() {
                 for chunk in streaming_chunks {
                     chat_view.state.add_message("assistant", &chunk);
