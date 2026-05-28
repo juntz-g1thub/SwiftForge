@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -114,8 +115,8 @@ impl AgentTaskState {
 pub enum CoordinatorState {
     Idle,
     Managing {
-        active_task_id: Uuid,
-        pending_queue: Vec<QueuedTask>,
+        active_task_id: Option<Uuid>,
+        pending_queue: VecDeque<QueuedTask>,
     },
 }
 

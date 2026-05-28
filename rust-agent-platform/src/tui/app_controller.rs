@@ -352,24 +352,31 @@ impl AppController {
             }
         }
 
-        if let Some(chat_view) = self.get_chat_view_mut() {
+        let streaming_chunks = {
+            let mut chunks = Vec::new();
             if let Ok(receiver) = self.ui_state.response_receiver.lock() {
                 if let Some(ref rx) = *receiver {
                     while let Ok(result) = rx.try_recv() {
                         match result {
-                            Ok(chunk) => {
-                                self.ui_state.append_streaming(&chunk);
-                            }
-                            Err(_e) => {
-                                if let Ok(mut streaming) = self.ui_state.streaming_text.lock() {
-                                    let _ = streaming.take();
-                                }
-                            }
+                            Ok(chunk) => chunks.push(chunk),
+                            Err(_e) => {}
                         }
                     }
                 }
             }
+            chunks
+        };
+
+        if !streaming_chunks.is_empty() {
+            if let Some(chat_view) = self.get_chat_view_mut() {
+                for chunk in streaming_chunks {
+                    chat_view.state.add_message("assistant", &chunk);
+                }
+            }
         }
+
+        let _ = self.ui_state.streaming_text.lock()
+            .map(|mut s| s.take());
     }
 
     fn process_debug_rx(&mut self) {
