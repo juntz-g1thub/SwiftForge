@@ -113,7 +113,7 @@ impl AppController {
     }
 
     fn handle_action(&mut self, action: Action) -> Result<()> {
-        self.log(&format!("Action: {:?}", action));
+        info!(action = ?action, "handle_action");
 
         match action {
             Action::SendMessage(msg) => {
