@@ -55,7 +55,7 @@ impl DeepSeekProvider {
         Self {
             api_key,
             base_url: base_url.unwrap_or_else(|| "https://api.deepseek.com".to_string()),
-            model: model.unwrap_or_else(|| "deepseek-chat".to_string()),
+            model: model.unwrap_or_else(|| "deepseek-v4-flash".to_string()),
         }
     }
 

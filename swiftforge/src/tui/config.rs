@@ -53,7 +53,7 @@ impl Default for AppConfig {
             ProviderSettings {
                 base_url: None,
                 api_key: None,
-                model: "deepseek-v4-pro".to_string(),
+                model: "deepseek-v4-flash".to_string(),
                 enabled: true,
             },
         );
