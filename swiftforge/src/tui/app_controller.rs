@@ -8,7 +8,8 @@ use tokio::runtime::Builder;
 use tracing::{debug, error, info, trace};
 
 use crate::core::{Agent, AgentConfig, AgentRole};
-use crate::providers::{OpenAIProvider, AnthropicProvider, OllamaProvider, DeepSeekProvider, MiniMaxProvider, CustomProvider};
+use swiftforge_providers::{OpenAIProvider, AnthropicProvider, OllamaProvider, DeepSeekProvider, MiniMaxProvider, CustomProvider};
+use swiftforge_provider_core::ProviderRegistry;
 use swiftforge_tools::{BashTool, ReadTool, WriteTool, EditTool, GrepTool};
 use swiftforge_types::ToolRegistry;
 use crate::tui::config::ConfigManager;
@@ -39,13 +40,62 @@ impl AppController {
         tool_registry.register(GrepTool::new());
         let tool_registry = Arc::new(tool_registry);
 
+        let config = ConfigManager::new();
+        let provider_name = config.get_provider().to_string();
+        let model_name = config.get_model(&provider_name).to_string();
+        let api_key = config.get_api_key(&provider_name).unwrap_or_default();
+        let base_url = config.get_base_url(&provider_name);
+
+        let mut registry = ProviderRegistry::new();
+        let llm_provider: swiftforge_provider_core::DynLLMProvider;
+        let tool_provider: Option<swiftforge_provider_core::DynToolCallingProvider>;
+
+        match provider_name.as_str() {
+            "openai" => {
+                let p = OpenAIProvider::new(api_key, base_url);
+                llm_provider = Arc::new(p.clone());
+                tool_provider = Some(Arc::new(p));
+            }
+            "anthropic" => {
+                let p = AnthropicProvider::new(api_key, base_url);
+                llm_provider = Arc::new(p.clone());
+                tool_provider = Some(Arc::new(p));
+            }
+            "deepseek" => {
+                let p = DeepSeekProvider::new(api_key, base_url, Some(model_name.clone()));
+                llm_provider = Arc::new(p.clone());
+                tool_provider = Some(Arc::new(p));
+            }
+            "ollama" => {
+                let p = OllamaProvider::new(base_url, Some(model_name.clone()));
+                llm_provider = Arc::new(p.clone());
+                tool_provider = Some(Arc::new(p));
+            }
+            "minimax" => {
+                let p = MiniMaxProvider::new(api_key, base_url, Some(model_name.clone()));
+                llm_provider = Arc::new(p.clone());
+                tool_provider = Some(Arc::new(p));
+            }
+            "custom" => {
+                let p = CustomProvider::new("custom".to_string(), api_key, base_url.unwrap_or_default(), model_name.clone());
+                llm_provider = Arc::new(p.clone());
+                tool_provider = Some(Arc::new(p));
+            }
+            _ => {
+                let p = DeepSeekProvider::new(api_key, base_url, Some(model_name.clone()));
+                llm_provider = Arc::new(p.clone());
+                tool_provider = Some(Arc::new(p));
+            }
+        };
+
         let agent_config = AgentConfig {
             name: "tui-agent".to_string(),
             role: AgentRole::Executor,
-            model: None,
+            model: Some(model_name),
             temperature: 0.7,
         };
-        let agent = Agent::new(agent_config)
+        let agent = Agent::new(agent_config, llm_provider)
+            .with_tool_provider(tool_provider)
             .with_tool_registry(Arc::clone(&tool_registry));
 
         let config = ConfigManager::new();
@@ -214,40 +264,7 @@ impl AppController {
         runtime.spawn(async move {
             debug!(provider = %provider_name, "SPAWN: task started");
 
-            let model_opt = Some(model.clone());
-
-            let final_agent: Arc<Agent> = match provider_name.as_str() {
-                "openai" => {
-                    let p = OpenAIProvider::new(api_key.unwrap_or_default(), base_url);
-                    Arc::new(Agent::clone(&agent).with_tool_provider("openai", p))
-                }
-                "anthropic" => {
-                    let p = AnthropicProvider::new(api_key.unwrap_or_default(), base_url);
-                    Arc::new(Agent::clone(&agent).with_tool_provider("anthropic", p))
-                }
-                "ollama" => {
-                    let p = OllamaProvider::new(base_url, model_opt);
-                    Arc::new(Agent::clone(&agent).with_tool_provider("ollama", p))
-                }
-                "deepseek" => {
-                    let p = DeepSeekProvider::new(api_key.unwrap_or_default(), base_url, model_opt);
-                    Arc::new(Agent::clone(&agent).with_tool_provider("deepseek", p))
-                }
-                "minimax" => {
-                    let p = MiniMaxProvider::new(api_key.unwrap_or_default(), base_url, model_opt);
-                    Arc::new(Agent::clone(&agent).with_tool_provider("minimax", p))
-                }
-                "custom" => {
-                    let p = CustomProvider::new(
-                        "custom".to_string(),
-                        api_key.unwrap_or_default(),
-                        base_url.unwrap_or_default(),
-                        model_opt.unwrap_or_default(),
-                    );
-                    Arc::new(Agent::clone(&agent).with_tool_provider("custom", p))
-                }
-                _ => agent,
-            };
+            let final_agent = agent;
 
             {
                 if let Ok(mut msgs) = debug_messages.lock() {

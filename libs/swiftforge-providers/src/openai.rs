@@ -1,13 +1,23 @@
 use async_trait::async_trait;
-use crate::providers::{LLMProvider, ToolCallingProvider};
-use crate::core::{ModelResponse, Usage, Message, ToolDefinition};
-use anyhow::{Result, Context};
+use swiftforge_provider_core::{LLMProvider, ToolCallingProvider, ProviderError};
+use swiftforge_types::{ModelResponse, Usage, Message, ToolDefinition};
+use swiftforge_provider_core::error::Result;
 use tokio_stream::StreamExt;
 
 pub struct OpenAIProvider {
     api_key: String,
     base_url: String,
     model: String,
+}
+
+impl Clone for OpenAIProvider {
+    fn clone(&self) -> Self {
+        Self {
+            api_key: self.api_key.clone(),
+            base_url: self.base_url.clone(),
+            model: self.model.clone(),
+        }
+    }
 }
 
 impl OpenAIProvider {
@@ -26,15 +36,16 @@ impl OpenAIProvider {
             .get(&url)
             .header("Authorization", format!("Bearer {}", self.api_key))
             .send()
-            .await?;
+            .await
+            .map_err(|e| ProviderError::NetworkError(e.to_string()))?;
 
         let status = response.status();
         if !status.is_success() {
             let body = response.text().await.unwrap_or_default();
-            anyhow::bail!("HTTP {}: {}", status, body);
+            return Err(ProviderError::ApiError { status: status.as_u16(), message: body }.into());
         }
 
-        let data: serde_json::Value = response.json().await?;
+        let data: serde_json::Value = response.json().await.map_err(|e| ProviderError::ParseError(e.to_string()))?;
         let models = data["data"]
             .as_array()
             .map(|arr| {
@@ -73,9 +84,10 @@ impl OpenAIProvider {
             .header("Content-Type", "application/json")
             .json(&request_body)
             .send()
-            .await?;
+            .await
+            .map_err(|e| ProviderError::NetworkError(e.to_string()))?;
 
-        let data: serde_json::Value = response.json().await?;
+        let data: serde_json::Value = response.json().await.map_err(|e| ProviderError::ParseError(e.to_string()))?;
         let content = data["choices"][0]["message"]["content"]
             .as_str()
             .unwrap_or("")
@@ -214,7 +226,7 @@ impl LLMProvider for OpenAIProvider {
         let data: serde_json::Value = response.json().await?;
         let content = data["choices"][0]["message"]["content"]
             .as_str()
-            .context("No content in response")?
+            .ok_or_else(|| ProviderError::InvalidResponse("No content in response".to_string()))?
             .to_string();
 
         Ok(ModelResponse::new(content, Usage {

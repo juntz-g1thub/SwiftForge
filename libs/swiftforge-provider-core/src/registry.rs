@@ -1,41 +1,7 @@
-mod openai;
-mod anthropic;
-mod ollama;
-mod deepseek;
-mod minimax;
-mod custom;
-
-pub use openai::OpenAIProvider;
-pub use anthropic::AnthropicProvider;
-pub use ollama::OllamaProvider;
-pub use deepseek::DeepSeekProvider;
-pub use minimax::MiniMaxProvider;
-pub use custom::CustomProvider;
-
-pub use crate::core::{ModelResponse, Usage, Message, ToolDefinition};
-
-use async_trait::async_trait;
-use anyhow::Result;
-use std::sync::Arc;
+use crate::error::ProviderError;
+use crate::traits::{DynLLMProvider, DynToolCallingProvider, LLMProvider, ToolCallingProvider};
 use std::collections::HashMap;
-
-#[async_trait]
-pub trait LLMProvider: Send + Sync {
-    async fn chat(&self, messages: Vec<Message>) -> Result<ModelResponse>;
-    fn provider_name(&self) -> &str;
-    async fn list_models(&self) -> Result<Vec<String>>;
-    async fn stream_chat(&self, messages: Vec<Message>, on_chunk: Box<dyn FnMut(String) + Send + Sync + 'static>) -> Result<()>;
-}
-
-#[async_trait]
-pub trait ToolCallingProvider: Send + Sync {
-    async fn chat_with_tools(&self, messages: Vec<Message>, tools: Vec<ToolDefinition>) -> Result<ModelResponse>;
-    fn provider_name(&self) -> &str;
-    async fn stream_chat_with_tools(&self, messages: Vec<Message>, tools: Vec<ToolDefinition>, on_chunk: Box<dyn FnMut(String) + Send + Sync + 'static>) -> Result<()>;
-}
-
-pub type DynLLMProvider = Arc<dyn LLMProvider>;
-pub type DynToolCallingProvider = Arc<dyn ToolCallingProvider>;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct ProviderRegistry {
@@ -60,8 +26,13 @@ impl ProviderRegistry {
         }
     }
 
-    pub fn register_with_tools<P: ToolCallingProvider + 'static>(&mut self, name: &str, provider: P) {
-        self.tool_providers.insert(name.to_string(), Arc::new(provider));
+    pub fn register_with_tools<P: ToolCallingProvider + 'static>(
+        &mut self,
+        name: &str,
+        provider: P,
+    ) {
+        self.tool_providers
+            .insert(name.to_string(), Arc::new(provider));
         if self.default_provider.is_none() {
             self.default_provider = Some(name.to_string());
         }
@@ -83,11 +54,15 @@ impl ProviderRegistry {
     }
 
     pub fn default(&self) -> Option<&DynLLMProvider> {
-        self.default_provider.as_ref().and_then(|n| self.providers.get(n))
+        self.default_provider
+            .as_ref()
+            .and_then(|n| self.providers.get(n))
     }
 
     pub fn default_tool_provider(&self) -> Option<&DynToolCallingProvider> {
-        self.default_provider.as_ref().and_then(|n| self.tool_providers.get(n))
+        self.default_provider
+            .as_ref()
+            .and_then(|n| self.tool_providers.get(n))
     }
 
     pub fn list_providers(&self) -> Vec<String> {

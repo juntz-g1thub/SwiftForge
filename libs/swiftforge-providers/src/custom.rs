@@ -1,89 +1,40 @@
 use async_trait::async_trait;
-use crate::providers::{LLMProvider, ToolCallingProvider};
-use crate::core::{ModelResponse, Usage, Message, ToolDefinition};
-use anyhow::{Result, Context};
+use swiftforge_provider_core::{LLMProvider, ToolCallingProvider, ProviderError};
+use swiftforge_types::{ModelResponse, Usage, Message, ToolDefinition};
+use swiftforge_provider_core::error::Result;
+use anyhow::Context;
 use tokio_stream::StreamExt;
 
-pub struct DeepSeekProvider {
+pub struct CustomProvider {
+    name: String,
     api_key: String,
     base_url: String,
     model: String,
 }
 
-/// Helper function to write log entries consistently
-fn write_log(entry: &str) {
-    let timestamp = chrono::Local::now().format("%H:%M:%S%.3f");
-    let formatted = format!("[{}] DEEPSEEK: {}\n", timestamp, entry);
-
-    if let Ok(log_path) = std::env::var("DEBUG_LOG_PATH") {
-        if let Ok(mut file) = std::fs::OpenOptions::new().append(true).open(&log_path) {
-            use std::io::Write;
-            let _ = writeln!(file, "{}", formatted.trim());
+impl Clone for CustomProvider {
+    fn clone(&self) -> Self {
+        Self {
+            name: self.name.clone(),
+            api_key: self.api_key.clone(),
+            base_url: self.base_url.clone(),
+            model: self.model.clone(),
         }
     }
 }
 
-/// Log request body with pretty-printed JSON
-fn log_request(body: &serde_json::Value) {
-    if let Ok(json_str) = serde_json::to_string_pretty(body) {
-        write_log(&format!("REQUEST:\n{}", json_str));
-    }
-}
-
-/// Log raw SSE chunk before parsing
-fn log_raw_chunk(line: &str) {
-    let trimmed = line.trim();
-    write_log(&format!("RAW: {}", trimmed));
-}
-
-/// Log parse state for each delta
-fn log_parse_state(reasoning: Option<&str>, content: Option<&str>, tool_calls_count: usize, is_thinking: bool) {
-    let reasoning_preview = reasoning
-        .map(|s| s.chars().take(80).collect::<String>())
-        .map(|s| format!("\"{}\"", s))
-        .unwrap_or_else(|| "None".to_string());
-    let content_preview = content
-        .map(|s| s.chars().take(80).collect::<String>())
-        .map(|s| format!("\"{}\"", s))
-        .unwrap_or_else(|| "None".to_string());
-    write_log(&format!("PARSE: reasoning={}, content={}, tools={}, is_thinking={}",
-        reasoning_preview, content_preview, tool_calls_count, is_thinking));
-}
-
-impl DeepSeekProvider {
-    pub fn new(api_key: String, base_url: Option<String>, model: Option<String>) -> Self {
+impl CustomProvider {
+    pub fn new(name: String, api_key: String, base_url: String, model: String) -> Self {
         Self {
+            name,
             api_key,
-            base_url: base_url.unwrap_or_else(|| "https://api.deepseek.com".to_string()),
-            model: model.unwrap_or_else(|| "deepseek-v4-flash".to_string()),
+            base_url,
+            model,
         }
     }
 
     pub async fn list_models(&self) -> Result<Vec<String>> {
-        let url = format!("{}/v1/models", self.base_url);
-        let client = reqwest::Client::new();
-        let response = client
-            .get(&url)
-            .header("Authorization", format!("Bearer {}", self.api_key))
-            .send()
-            .await?;
-
-        let status = response.status();
-        if !status.is_success() {
-            let body = response.text().await.unwrap_or_default();
-            anyhow::bail!("HTTP {}: {}", status, body);
-        }
-
-        let data: serde_json::Value = response.json().await?;
-        let models = data["data"]
-            .as_array()
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|m| m["id"].as_str().map(String::from))
-                    .collect()
-            })
-            .unwrap_or_default();
-        Ok(models)
+        Ok(vec![self.model.clone()])
     }
 
     pub async fn chat_with_tools(&self, messages: Vec<Message>, tools: Vec<ToolDefinition>) -> Result<ModelResponse> {
@@ -104,7 +55,7 @@ impl DeepSeekProvider {
             "messages": messages.iter().map(|m| {
                 serde_json::json!({ "role": m.role, "content": m.content })
             }).collect::<Vec<_>>(),
-            "tools": tools_json,
+            "tools": tools_json
         });
 
         let response = client
@@ -115,17 +66,7 @@ impl DeepSeekProvider {
             .send()
             .await?;
 
-let data: serde_json::Value = response.json().await?;
-
-        let data_str = serde_json::to_string_pretty(&data).unwrap_or_default();
-        if let Ok(log_path) = std::env::var("DEBUG_LOG_PATH") {
-            if let Ok(mut file) = std::fs::OpenOptions::new().append(true).open(&log_path) {
-                use std::io::Write;
-                let _ = writeln!(file, "=== DEEPSEEK RESPONSE ===");
-                let _ = writeln!(file, "{}", data_str);
-            }
-        }
-
+        let data: serde_json::Value = response.json().await?;
         let content = data["choices"][0]["message"]["content"]
             .as_str()
             .unwrap_or("")
@@ -150,23 +91,17 @@ let data: serde_json::Value = response.json().await?;
 
     pub async fn stream_chat(&self, messages: Vec<Message>, mut on_chunk: Box<dyn FnMut(String) + Send + Sync + 'static>) -> Result<()> {
         let client = reqwest::Client::new();
-        let request_body = serde_json::json!({
-            "model": self.model,
-            "messages": messages.iter().map(|m| {
-                serde_json::json!({ "role": m.role, "content": m.content })
-            }).collect::<Vec<_>>(),
-            "stream": true,
-            "thinking": {
-                "type": "enabled"
-            },
-            "reasoning_effort": "high"
-        });
-
         let response = client
             .post(format!("{}/chat/completions", self.base_url))
             .header("Authorization", format!("Bearer {}", self.api_key))
             .header("Content-Type", "application/json")
-            .json(&request_body)
+            .json(&serde_json::json!({
+                "model": self.model,
+                "messages": messages.iter().map(|m| {
+                    serde_json::json!({ "role": m.role, "content": m.content })
+                }).collect::<Vec<_>>(),
+                "stream": true
+            }))
             .send()
             .await?;
 
@@ -178,24 +113,14 @@ let data: serde_json::Value = response.json().await?;
 
             for line in text.lines() {
                 let line = line.trim();
-                if line.is_empty() {
-                    continue;
-                }
                 if line.starts_with("data:") {
                     let data = line.trim_start_matches("data:").trim();
                     if data == "[DONE]" {
                         return Ok(());
                     }
                     if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
-                        if let Some(reasoning) = json["choices"][0]["delta"]["reasoning_content"].as_str() {
-                            if !reasoning.is_empty() {
-                                on_chunk(reasoning.to_string());
-                            }
-                        }
                         if let Some(content) = json["choices"][0]["delta"]["content"].as_str() {
-                            if !content.is_empty() {
-                                on_chunk(content.to_string());
-                            }
+                            on_chunk(content.to_string());
                         }
                     }
                 }
@@ -224,12 +149,7 @@ let data: serde_json::Value = response.json().await?;
                 serde_json::json!({ "role": m.role, "content": m.content })
             }).collect::<Vec<_>>(),
             "tools": tools_json,
-            "tool_choice": "auto",
-            "stream": true,
-            "thinking": {
-                "type": "enabled"
-            },
-            "reasoning_effort": "low"
+            "stream": true
         });
 
         let response = client
@@ -248,39 +168,14 @@ let data: serde_json::Value = response.json().await?;
 
             for line in text.lines() {
                 let line = line.trim();
-                if line.is_empty() {
-                    continue;
-                }
                 if line.starts_with("data:") {
                     let data = line.trim_start_matches("data:").trim();
                     if data == "[DONE]" {
                         return Ok(());
                     }
                     if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
-                        if let Some(reasoning) = json["choices"][0]["delta"]["reasoning_content"].as_str() {
-                            if !reasoning.is_empty() {
-                                on_chunk(reasoning.to_string());
-                            }
-                        }
                         if let Some(content) = json["choices"][0]["delta"]["content"].as_str() {
-                            if !content.is_empty() {
-                                on_chunk(content.to_string());
-                            }
-                        }
-                        if let Some(tool_calls) = json["choices"][0]["delta"]["tool_calls"].as_array() {
-                            for tool_call in tool_calls {
-                                if let Some(func) = tool_call.get("function") {
-                                    let name = func.get("name").and_then(|n| n.as_str()).unwrap_or("");
-                                    let arguments = func.get("arguments").and_then(|a| a.as_str()).unwrap_or("");
-                                    if !name.is_empty() {
-                                        let tc_json = serde_json::json!({
-                                            "name": name,
-                                            "arguments": arguments
-                                        });
-                                        on_chunk(serde_json::to_string(&tc_json).unwrap());
-                                    }
-                                }
-                            }
+                            on_chunk(content.to_string());
                         }
                     }
                 }
@@ -292,25 +187,18 @@ let data: serde_json::Value = response.json().await?;
 }
 
 #[async_trait]
-impl LLMProvider for DeepSeekProvider {
+impl LLMProvider for CustomProvider {
     async fn chat(&self, messages: Vec<Message>) -> Result<ModelResponse> {
         let client = reqwest::Client::new();
-        let request_body = serde_json::json!({
-            "model": self.model,
-            "messages": messages.iter().map(|m| {
-                serde_json::json!({ "role": m.role, "content": m.content })
-            }).collect::<Vec<_>>(),
-            "thinking": {
-                "type": "enabled"
-            },
-            "reasoning_effort": "high"
-        });
-
         let response = client
             .post(format!("{}/chat/completions", self.base_url))
             .header("Authorization", format!("Bearer {}", self.api_key))
-            .header("Content-Type", "application/json")
-            .json(&request_body)
+            .json(&serde_json::json!({
+                "model": self.model,
+                "messages": messages.iter().map(|m| {
+                    serde_json::json!({ "role": m.role, "content": m.content })
+                }).collect::<Vec<_>>()
+            }))
             .send()
             .await?;
 
@@ -327,7 +215,7 @@ impl LLMProvider for DeepSeekProvider {
     }
 
     fn provider_name(&self) -> &str {
-        "deepseek"
+        &self.name
     }
 
     async fn list_models(&self) -> Result<Vec<String>> {
@@ -340,13 +228,13 @@ impl LLMProvider for DeepSeekProvider {
 }
 
 #[async_trait]
-impl ToolCallingProvider for DeepSeekProvider {
+impl ToolCallingProvider for CustomProvider {
     async fn chat_with_tools(&self, messages: Vec<Message>, tools: Vec<ToolDefinition>) -> Result<ModelResponse> {
         Self::chat_with_tools(self, messages, tools).await
     }
 
     fn provider_name(&self) -> &str {
-        "deepseek"
+        &self.name
     }
 
     async fn stream_chat_with_tools(&self, messages: Vec<Message>, tools: Vec<ToolDefinition>, on_chunk: Box<dyn FnMut(String) + Send + Sync + 'static>) -> Result<()> {

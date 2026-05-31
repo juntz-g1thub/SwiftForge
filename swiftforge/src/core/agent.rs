@@ -5,8 +5,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
 use swiftforge_task::{TaskScheduler, Task, MessageBus, AgentMessage};
-use crate::providers::{LLMProvider, ProviderRegistry, ToolCallingProvider};
+use swiftforge_provider_core::{DynLLMProvider, DynToolCallingProvider, LLMProvider, ToolCallingProvider};
 use swiftforge_types::{Message, ModelResponse, Usage, ToolRegistry, ToolCall, ToolResult, ToolDefinition};
+use swiftforge_tools::ToolCallParser;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentConfig {
@@ -31,18 +32,22 @@ pub struct Agent {
     config: AgentConfig,
     scheduler: Option<Arc<TaskScheduler>>,
     message_bus: Option<Arc<MessageBus>>,
-    providers: ProviderRegistry,
+    llm_provider: DynLLMProvider,
+    tool_provider: Option<DynToolCallingProvider>,
     tool_registry: Option<Arc<ToolRegistry>>,
+    tool_parser: ToolCallParser,
 }
 
 impl Agent {
-    pub fn new(config: AgentConfig) -> Self {
+    pub fn new(config: AgentConfig, llm_provider: DynLLMProvider) -> Self {
         Self {
             config,
             scheduler: None,
             message_bus: None,
-            providers: ProviderRegistry::new(),
+            llm_provider,
+            tool_provider: None,
             tool_registry: None,
+            tool_parser: ToolCallParser::new(),
         }
     }
 
@@ -56,13 +61,8 @@ impl Agent {
         self
     }
 
-    pub fn with_provider<P: LLMProvider + 'static>(mut self, name: &str, provider: P) -> Self {
-        self.providers.register(name, provider);
-        self
-    }
-
-    pub fn with_tool_provider<P: ToolCallingProvider + 'static>(mut self, name: &str, provider: P) -> Self {
-        self.providers.register_with_tools(name, provider);
+    pub fn with_tool_provider(mut self, provider: Option<DynToolCallingProvider>) -> Self {
+        self.tool_provider = provider;
         self
     }
 
@@ -83,20 +83,8 @@ impl Agent {
         &self.config
     }
 
-    pub fn list_providers(&self) -> Vec<String> {
-        self.providers.list_providers()
-    }
-
-    pub fn list_tool_providers(&self) -> Vec<String> {
-        self.providers.list_tool_providers()
-    }
-
-    pub fn provider(&self, name: &str) -> Option<&Arc<dyn LLMProvider>> {
-        self.providers.get(name)
-    }
-
-    pub fn default_provider_name(&self) -> Option<&str> {
-        self.providers.default().map(|p| p.provider_name())
+    pub fn provider_name(&self) -> &str {
+        self.llm_provider.provider_name()
     }
 
     pub fn has_tool_registry(&self) -> bool {
@@ -130,66 +118,11 @@ impl Agent {
     }
 
     pub fn parse_tool_calls(&self, content: &str) -> Vec<ToolCall> {
-        let mut calls = Vec::new();
-        if let Ok(json) = serde_json::from_str::<JsonValue>(content) {
-            if let Some(tool_calls) = json.get("tool_calls").and_then(|t| t.as_array()) {
-                for call in tool_calls {
-                    if let (Some(name), Some(args)) = (
-                        call.get("name").and_then(|n| n.as_str()),
-                        call.get("arguments")
-                    ) {
-                        let arguments: HashMap<String, JsonValue> = if let serde_json::Value::Object(map) = args {
-                            map.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
-                        } else if let serde_json::Value::String(s) = args {
-                            serde_json::from_str(&s).unwrap_or_default()
-                        } else {
-                            HashMap::new()
-                        };
-                        calls.push(ToolCall { name: name.to_string(), arguments });
-                    }
-                }
-            }
-        }
-        let re = regex::Regex::new(r#"<tool_call>\s*\{[^}]*?"name"\s*:\s*"([^"]+)"[^}]*?"arguments"\s*:\s*(\{[^}]+\})[^}]*\}</tool_call>"#).ok();
-        if let Some(re) = re {
-            for cap in re.captures_iter(content) {
-                let name = cap.get(1).map(|m| m.as_str().to_string()).unwrap_or_default();
-                let args_str = cap.get(2).map(|m| m.as_str()).unwrap_or("{}");
-                let arguments: HashMap<String, JsonValue> = serde_json::from_str(args_str).unwrap_or_default();
-                if !name.is_empty() {
-                    calls.push(ToolCall { name, arguments });
-                }
-            }
-        }
-        calls
+        self.tool_parser.parse(content)
     }
 
-    pub fn parse_tool_calls_from_json(&self, tool_calls: &[serde_json::Value]) -> Vec<ToolCall> {
-        let mut calls = Vec::new();
-        for call in tool_calls {
-            // DeepSeek/OpenAI format: {"function": {"name": "...", "arguments": "..."}}
-            // Also supports direct format: {"name": "...", "arguments": {...}}
-            let name = call.get("function")
-                .and_then(|f| f.get("name"))
-                .and_then(|n| n.as_str())
-                .or_else(|| call.get("name").and_then(|n| n.as_str()));
-
-            let args = call.get("function")
-                .and_then(|f| f.get("arguments"))
-                .or_else(|| call.get("arguments"));
-
-            if let (Some(name), Some(args)) = (name, args) {
-                let arguments: HashMap<String, JsonValue> = if let serde_json::Value::Object(map) = args {
-                    map.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
-                } else if let serde_json::Value::String(s) = args {
-                    serde_json::from_str(&s).unwrap_or_default()
-                } else {
-                    HashMap::new()
-                };
-                calls.push(ToolCall { name: name.to_string(), arguments });
-            }
-        }
-        calls
+    pub fn parse_tool_calls_from_json(&self, tool_calls: &[JsonValue]) -> Vec<ToolCall> {
+        self.tool_parser.parse_from_json(tool_calls)
     }
 
     pub async fn execute_tool_calls(&self, calls: Vec<ToolCall>) -> Result<Vec<ToolResult>> {
@@ -204,15 +137,7 @@ impl Agent {
     }
 
     pub async fn chat(&self, messages: Vec<Message>) -> Result<ModelResponse> {
-        let provider = self.providers.default()
-            .ok_or_else(|| anyhow::anyhow!("No provider configured"))?;
-        provider.chat(messages).await
-    }
-
-    pub async fn chat_with(&self, provider_name: &str, messages: Vec<Message>) -> Result<ModelResponse> {
-        let provider = self.providers.get(provider_name)
-            .ok_or_else(|| anyhow::anyhow!("Provider {} not found", provider_name))?;
-        provider.chat(messages).await
+        self.llm_provider.chat(messages).await.map_err(|e: swiftforge_provider_core::ProviderError| anyhow::anyhow!("{:?}", e))
     }
 
     pub async fn chat_with_tools(&self, messages: Vec<Message>, debug_log: Option<String>, debug_ui: Option<std::sync::mpsc::Sender<String>>) -> Result<ModelResponse> {
@@ -235,19 +160,12 @@ impl Agent {
             }
         };
         log(&format!("chat_with_tools called"));
-        let provider = self.providers.default_tool_provider()
+        let provider = self.tool_provider.as_ref()
             .ok_or_else(|| anyhow::anyhow!("No tool-calling provider configured"))?;
         log("Got provider");
         let tools = self.get_tool_definitions();
         log(&format!("Got {} tools", tools.len()));
-        provider.chat_with_tools(messages, tools).await
-    }
-
-    pub async fn chat_with_tools_provider(&self, provider_name: &str, messages: Vec<Message>) -> Result<ModelResponse> {
-        let provider = self.providers.get_tool_provider(provider_name)
-            .ok_or_else(|| anyhow::anyhow!("Tool provider {} not found", provider_name))?;
-        let tools = self.get_tool_definitions();
-        provider.chat_with_tools(messages, tools).await
+        provider.chat_with_tools(messages, tools).await.map_err(|e: swiftforge_provider_core::ProviderError| anyhow::anyhow!("{:?}", e))
     }
 
     pub async fn chat_with_tools_streaming<F>(&self, messages: Vec<Message>, debug_log: Option<String>, debug_ui: Option<std::sync::mpsc::Sender<String>>, mut on_chunk: F) -> Result<ModelResponse>
@@ -272,7 +190,7 @@ impl Agent {
             }
         };
         log(&format!("chat_with_tools_streaming called"));
-        let provider = self.providers.default_tool_provider()
+        let provider = self.tool_provider.as_ref()
             .ok_or_else(|| anyhow::anyhow!("No tool-calling provider configured"))?;
         log("Got provider");
         let tools = self.get_tool_definitions();
@@ -324,7 +242,7 @@ impl Agent {
             }
         });
 
-        provider.stream_chat_with_tools(messages, tools, on_chunk_wrapper).await?;
+        provider.stream_chat_with_tools(messages, tools, on_chunk_wrapper).await.map_err(|e: swiftforge_provider_core::ProviderError| anyhow::anyhow!("{:?}", e))?;
 
         let result = accumulated.lock().unwrap().clone();
         let tool_calls = tool_calls_json.lock().unwrap().clone();
@@ -375,7 +293,7 @@ impl Agent {
         for i in 0..max_iterations {
             log(&format!("Agent loop iteration {}", i + 1));
 
-let stream_ui_clone = stream_ui.clone();
+            let stream_ui_clone = stream_ui.clone();
             let on_chunk = move |chunk: String| {
                 if let Some(ref t) = stream_ui_clone {
                     let _ = t.send(Ok(chunk));
@@ -461,9 +379,7 @@ let stream_ui_clone = stream_ui.clone();
     }
 
     pub async fn list_models(&self) -> Result<Vec<String>> {
-        let provider = self.providers.default()
-            .ok_or_else(|| anyhow::anyhow!("No provider configured"))?;
-        provider.list_models().await
+        self.llm_provider.list_models().await.map_err(|e: swiftforge_provider_core::ProviderError| anyhow::anyhow!("{:?}", e))
     }
 
     pub async fn process_task(&self) -> Result<Option<Task>> {
@@ -513,10 +429,10 @@ let stream_ui_clone = stream_ui.clone();
     }
 
     pub fn has_provider(&self) -> bool {
-        !self.providers.list_providers().is_empty()
+        true
     }
 
     pub fn has_tool_provider(&self) -> bool {
-        !self.providers.list_tool_providers().is_empty()
+        self.tool_provider.is_some()
     }
 }

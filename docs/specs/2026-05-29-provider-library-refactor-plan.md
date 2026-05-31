@@ -1,8 +1,8 @@
 # Provider 库独立化重构计划
 
-> 版本: 1.0
-> 日期: 2026-05-29
-> 状态: L3 设计 (待审批)
+> 版本: 2.0
+> 日期: 2026-05-30
+> 状态: L3 设计 (已定稿)
 > 分支: feat/tui-refactor
 
 ---
@@ -17,24 +17,36 @@
 
 ---
 
-## 二、目标架构
+## 二、关键设计决策
+
+| # | 问题 | 选择 | 理由 |
+|---|------|------|------|
+| 1 | 分发机制 | **trait object** (`dyn LLMProvider`) | Registry 运行时多态、测试友好、二进制小 |
+| 2 | Registry 关系 | **Registry 只负责构建** | Agent 独立持有 `Arc<dyn LLMProvider>`，生命周期不依赖 Registry |
+| 3 | 错误类型 | **ProviderError 包装 anyhow** | 库内清晰枚举，应用层 `anyhow::Result` 改动最少 |
+| 4 | Breaking change | **直接 breaking change** | SwiftForge 单一消费者，手动更新调用代码 |
+| 5 | 实现顺序 | **自底向上** | core → providers → tools → main app，每步验证 |
+
+---
+
+## 三、目标架构
 
 ```
 Workspace (SwiftForge)
 ├── libs/
-│   ├── swiftforge-types/         # 类型定义 (已有)
-│   ├── swiftforge-provider-core/  # NEW: Provider trait + Registry + Error
+│   ├── swiftforge-types/           # 类型定义 (已有)
+│   ├── swiftforge-provider-core/   # NEW: Provider trait + Registry + Error
 │   ├── swiftforge-providers/       # NEW: 具体 provider 实现
-│   ├── swiftforge-tools/          # 工具解析 (已有，需修改)
+│   ├── swiftforge-tools/           # 工具解析 (已有，需新增 parser.rs)
 │   └── ...
-└── swiftforge/                     # 主应用 (移除 providers/)
+└── swiftforge/                      # 主应用 (移除 providers/)
 ```
 
 ---
 
-## 三、新库详细设计
+## 四、新库详细设计
 
-### 3.1 swiftforge-provider-core
+### 4.1 swiftforge-provider-core
 
 **路径**: `libs/swiftforge-provider-core/`
 
@@ -52,10 +64,10 @@ async-trait = "0.1"
 thiserror = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+anyhow = "1"
 ```
 
 **模块结构**:
-
 ```
 src/
 ├── lib.rs       # 公共导出
@@ -103,6 +115,19 @@ pub enum ProviderError {
 }
 
 pub type Result<T> = std::result::Result<T, ProviderError>;
+
+// ProviderError <-> anyhow 双向转换
+impl From<anyhow::Error> for ProviderError {
+    fn from(e: anyhow::Error) -> Self {
+        ProviderError::Other(e.to_string())
+    }
+}
+
+impl From<ProviderError> for anyhow::Error {
+    fn from(e: ProviderError) -> Self {
+        anyhow::anyhow!("{:?}", e)
+    }
+}
 ```
 
 **traits.rs**:
@@ -178,7 +203,7 @@ impl Default for ProviderRegistry { ... }
 
 ---
 
-### 3.2 swiftforge-providers
+### 4.2 swiftforge-providers
 
 **路径**: `libs/swiftforge-providers/`
 
@@ -217,11 +242,10 @@ src/
 - 所有 `use crate::providers::{LLMProvider, ToolCallingProvider}` → `use swiftforge_provider_core::{LLMProvider, ToolCallingProvider}`
 - 所有 `use crate::core::{...}` → `use swiftforge_types::{...}`
 - `anyhow::Result` → `swiftforge_provider_core::error::Result`
-- 删除 `ProviderRegistry` 相关代码
 
 ---
 
-### 3.3 swiftforge-tools 工具解析
+### 4.3 swiftforge-tools 工具解析
 
 **路径**: `libs/swiftforge-tools/src/parser.rs` (新建)
 
@@ -250,20 +274,18 @@ impl ToolCallParser {
 
 ---
 
-## 四、swiftforge 主应用修改
+## 五、swiftforge 主应用修改
 
-### 4.1 删除的文件/目录
+### 5.1 删除的文件/目录
 
 ```
 swiftforge/src/providers/     # 整个目录删除
 ```
 
-### 4.2 core/agent.rs 修改
+### 5.2 core/agent.rs 修改
 
 **Before**:
 ```rust
-use crate::providers::{LLMProvider, ProviderRegistry, ToolCallingProvider};
-
 pub struct Agent {
     config: AgentConfig,
     scheduler: Option<Arc<TaskScheduler>>,
@@ -275,10 +297,6 @@ pub struct Agent {
 
 **After**:
 ```rust
-use swiftforge_provider_core::{
-    DynLLMProvider, DynToolCallingProvider, LLMProvider, ToolCallingProvider
-};
-
 pub struct Agent {
     config: AgentConfig,
     scheduler: Option<Arc<TaskScheduler>>,
@@ -286,7 +304,7 @@ pub struct Agent {
     llm_provider: DynLLMProvider,                    // trait object
     tool_provider: Option<DynToolCallingProvider>, // optional
     tool_registry: Option<Arc<ToolRegistry>>,
-    tool_parser: ToolCallParser,                   // 工具解析器
+    tool_parser: ToolCallParser,                    // 工具解析器
 }
 ```
 
@@ -300,26 +318,7 @@ pub struct Agent {
 | `parse_tool_calls()` | 调用 `self.tool_parser.parse()` |
 | `parse_tool_calls_from_json()` | 调用 `self.tool_parser.parse_from_json()` |
 
-### 4.3 Cargo.toml 修改
-
-**Before**:
-```toml
-[dependencies]
-# no provider-related deps
-```
-
-**After**:
-```toml
-[dependencies]
-swiftforge-provider-core = { path = "../libs/swiftforge-provider-core" }
-swiftforge-providers = { path = "../libs/swiftforge-providers" }
-swiftforge-types = { path = "../libs/swiftforge-types" }
-swiftforge-tools = { path = "../libs/swiftforge-tools" }
-swiftforge-task = { path = "../libs/swiftforge-task" }
-# ... 其他现有依赖保持不变
-```
-
-### 4.4 tui/app_controller.rs 修改
+### 5.3 tui/app_controller.rs 修改
 
 **Before**:
 ```rust
@@ -349,120 +348,6 @@ agent = agent
 
 ---
 
-## 五、实现步骤
-
-### Phase 1: 创建 swiftforge-provider-core
-
-**步骤 1.1**: 创建库结构
-```
-mkdir -p libs/swiftforge-provider-core/src
-```
-
-**步骤 1.2**: 编写 `Cargo.toml`
-
-**步骤 1.3**: 实现 `src/error.rs`
-
-**步骤 1.4**: 实现 `src/traits.rs`
-
-**步骤 1.5**: 实现 `src/registry.rs`
-
-**步骤 1.6**: 实现 `src/lib.rs`
-
-**步骤 1.7**: 验证编译
-```bash
-cargo build -p swiftforge-provider-core
-```
-
----
-
-### Phase 2: 创建 swiftforge-providers
-
-**步骤 2.1**: 创建库结构
-```
-mkdir -p libs/swiftforge-providers/src
-```
-
-**步骤 2.2**: 编写 `Cargo.toml`
-
-**步骤 2.3**: 迁移 `src/openai.rs`
-- 替换 import
-- 替换 `anyhow::Result` → `ProviderError::Result`
-- 验证编译
-
-**步骤 2.4**: 迁移 `src/anthropic.rs`
-
-**步骤 2.5**: 迁移 `src/deepseek.rs`
-
-**步骤 2.6**: 迁移 `src/ollama.rs`
-
-**步骤 2.7**: 迁移 `src/minimax.rs`
-
-**步骤 2.8**: 迁移 `src/custom.rs`
-
-**步骤 2.9**: 实现 `src/utils.rs` (SSE 解析等)
-
-**步骤 2.10**: 实现 `src/lib.rs`
-
-**步骤 2.11**: 验证编译
-```bash
-cargo build -p swiftforge-providers
-```
-
----
-
-### Phase 3: 重构 swiftforge-tools (工具解析)
-
-**步骤 3.1**: 创建 `libs/swiftforge-tools/src/parser.rs`
-
-**步骤 3.2**: 实现 `ToolCallParser`
-
-**步骤 3.3**: 在 `libs/swiftforge-tools/src/lib.rs` 添加导出
-
-**步骤 3.4**: 验证编译
-```bash
-cargo build -p swiftforge-tools
-```
-
----
-
-### Phase 4: 重构 swiftforge 主应用
-
-**步骤 4.1**: 删除 `swiftforge/src/providers/` 目录
-
-**步骤 4.2**: 修改 `swiftforge/Cargo.toml`
-- 添加新依赖
-
-**步骤 4.3**: 重构 `swiftforge/src/core/mod.rs`
-- 移除 `use crate::core::{...}` re-exports
-
-**步骤 4.4**: 重构 `swiftforge/src/core/agent.rs`
-- 替换 struct 字段
-- 替换方法实现
-- 添加 tool_parser 字段
-
-**步骤 4.5**: 修改 `swiftforge/src/tui/app_controller.rs`
-- 使用 ProviderRegistry + provider 实现
-
-**步骤 4.6**: 验证编译
-```bash
-cargo build
-```
-
----
-
-### Phase 5: 验证与测试
-
-**步骤 5.1**: 运行现有测试
-```bash
-cargo test
-```
-
-**步骤 5.2**: 手动验证各 provider 工作正常
-
-**步骤 5.3**: 验证流式输出正常工作
-
----
-
 ## 六、文件变更清单
 
 ### 新建文件
@@ -471,7 +356,7 @@ cargo test
 |------|------|
 | `libs/swiftforge-provider-core/Cargo.toml` | 包配置 |
 | `libs/swiftforge-provider-core/src/lib.rs` | 公共导出 |
-| `libs/swiftforge-provider-core/src/error.rs` | 错误类型 |
+| `libs/swiftforge-provider-core/src/error.rs` | 错误类型 + anyhow 转换 |
 | `libs/swiftforge-provider-core/src/traits.rs` | Trait 定义 |
 | `libs/swiftforge-provider-core/src/registry.rs` | Registry 实现 |
 | `libs/swiftforge-providers/Cargo.toml` | 包配置 |
@@ -511,16 +396,7 @@ cargo test
 
 ---
 
-## 七、风险与注意事项
-
-1. **错误转换**: 从 `anyhow::Error` 转为 `ProviderError` 需要实现 `From` trait
-2. **DeepSeek 调试日志**: 原来使用 `chrono` 的调试日志在迁移后保留
-3. **流式处理**: SSE 解析逻辑需要确保在 provider 库中正确处理
-4. **API 兼容性**: Agent 接口变化是 breaking change，但内部用户只有 TUI
-
----
-
-## 八、验收标准
+## 七、验收标准
 
 - [ ] `cargo build -p swiftforge-provider-core` 成功
 - [ ] `cargo build -p swiftforge-providers` 成功

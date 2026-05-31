@@ -1,5 +1,4 @@
 pub mod core;
-pub mod providers;
 pub mod tui;
 pub mod platform;
 

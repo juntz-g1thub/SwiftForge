@@ -1,12 +1,22 @@
 use async_trait::async_trait;
-use crate::providers::{LLMProvider, ToolCallingProvider};
-use crate::core::{ModelResponse, Usage, Message, ToolDefinition};
-use anyhow::{Result, Context};
+use swiftforge_provider_core::{LLMProvider, ToolCallingProvider, ProviderError};
+use swiftforge_types::{ModelResponse, Usage, Message, ToolDefinition};
+use swiftforge_provider_core::error::Result;
+use anyhow::Context;
 use tokio_stream::StreamExt;
 
 pub struct OllamaProvider {
     base_url: String,
     model: String,
+}
+
+impl Clone for OllamaProvider {
+    fn clone(&self) -> Self {
+        Self {
+            base_url: self.base_url.clone(),
+            model: self.model.clone(),
+        }
+    }
 }
 
 impl OllamaProvider {

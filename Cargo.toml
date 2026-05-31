@@ -6,6 +6,8 @@ members = [
     "libs/swiftforge-mcp",
     "libs/swiftforge-hooks",
     "libs/swiftforge-skill",
+    "libs/swiftforge-provider-core",
+    "libs/swiftforge-providers",
     "swiftforge",
 ]
 resolver = "2"
