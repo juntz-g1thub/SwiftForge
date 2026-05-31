@@ -9,8 +9,6 @@ pub enum Action {
     GoBack,
     ScrollUp,
     ScrollDown,
-    ScrollDebugUp,
-    ScrollDebugDown,
     ResetScroll,
     InputChar(char),
     InputBackspace,
@@ -26,7 +24,6 @@ pub enum Action {
     SaveBaseUrl(String),
     FetchModels,
     SelectModel(String),
-    ToggleDebug,
     Quit,
 }
 
@@ -34,5 +31,4 @@ pub enum Action {
 pub enum ViewStateKind {
     Chat,
     Config,
-    Debug,
 }

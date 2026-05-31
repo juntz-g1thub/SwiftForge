@@ -18,15 +18,13 @@ swiftforge-tools = { path = "../libs/swiftforge-tools" }
 swiftforge-mcp = { path = "../libs/swiftforge-mcp" }
 swiftforge-hooks = { path = "../libs/swiftforge-hooks" }
 swiftforge-skill = { path = "../libs/swiftforge-skill" }
+swiftforge-log = { path = "../libs/swiftforge-log" }
 swiftforge-provider-core = { path = "../libs/swiftforge-provider-core" }
 swiftforge-providers = { path = "../libs/swiftforge-providers" }
 
 tokio.workspace = true
 tokio-stream.workspace = true
 futures.workspace = true
-tracing.workspace = true
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-tracing-appender = "0.2"
 anyhow.workspace = true
 thiserror.workspace = true
 async-trait.workspace = true

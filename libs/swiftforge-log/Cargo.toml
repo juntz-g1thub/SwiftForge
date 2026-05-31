@@ -1,0 +1,12 @@
+[package]
+name = "swiftforge-log"
+version = "0.1.0"
+edition = "2021"
+description = "A lightweight file-based logging library for Rust applications"
+license = "MIT OR Apache-2.0"
+
+[lib]
+name = "swiftforge_log"
+
+[dependencies]
+chrono = "0.4"

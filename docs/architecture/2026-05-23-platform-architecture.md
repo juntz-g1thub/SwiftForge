@@ -133,13 +133,13 @@
                                       │
                                       ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                      Log Module (src/log/) ✅ 新增                          │
+│                      swiftforge-log (libs/swiftforge-log/) ✅ 已完成          │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                        │
 │  │   Log       │  │  FileWriter │  │  LogLevel   │                        │
 │  │ (全局宏)    │  │  (单例)     │  │ TRACE-ERROR │                        │
 │  └─────────────┘  └─────────────┘  └─────────────┘                        │
 │                                                                              │
-│  日志输出到 ~/.fastcode/ragent.log，替代前端 Debug Panel                     │
+│  日志输出到 ~/.fastcode/ragent.log，已移除前端 Debug Panel                   │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -149,7 +149,7 @@
 
 | 模块 | 问题数 | 严重度 | 状态 | 说明 |
 |------|--------|--------|------|------|
-| TUI Frontend | 2 | 中 | ⚠️ 改进中 | MVC重构完成，Debug Panel将移除 |
+| TUI Frontend | 2 | 中 | ✅ 已完成 | MVC重构完成，Debug Panel已移除 |
 | Provider接口 | 1 | 高 | ⚠️ 部分解决 | DeepSeek解析已实现，reasoning无累积 |
 | Agent Loop | 2 | 中 | ⚠️ 待改进 | 工具串行执行、无并发 |
 | Session管理 | 2 | 中 | ❌ 未解决 | 未被使用，无context window管理 |
@@ -157,7 +157,7 @@
 | Orchestration | 1 | 低 | ❌ 未解决 | TaskScheduler/MessageBus未被使用 |
 | MCP Client | 2 | 中 | ⚠️ 改进中 | 已有协议和client，正设计适配层 |
 | Platform | 0 | - | ✅ 已实现 | IntentGate/Hooks/Skill/Boulder完整 |
-| Log Module | 0 | - | 📋 规划中 | 替代Debug Panel，统一日志系统 |
+| Log Module | 0 | - | ✅ 已完成 | swiftforge-log 静态库，替代Debug Panel |
 
 ---
 
@@ -807,9 +807,11 @@ macro_rules! error { ($($arg:tt)*) => { log!(LogLevel::ERROR, $($arg)*); } }
 
 | 文件 | 说明 |
 |------|------|
-| `src/log/mod.rs` | Log, LogLevel, FileWriter, 全局宏 |
-| `src/log/level.rs` | LogLevel 枚举 |
-| `src/log/writer.rs` | FileWriter 单例 |
+| `libs/swiftforge-log/src/lib.rs` | Log, LogLevel, FileWriter, 全局宏 |
+| `libs/swiftforge-log/src/level.rs` | LogLevel 枚举 |
+| `libs/swiftforge-log/src/writer.rs` | FileWriter 单例 |
+| `libs/swiftforge-log/src/formater.rs` | 格式化器 |
+| `libs/swiftforge-log/src/macro.rs` | 公共宏定义 |
 | `src/integration/mcp/adapter.rs` | McpToolAdapter |
 | `src/integration/mcp/pool.rs` | McpConnectionPool |
 | `src/integration/mcp/loader.rs` | McpToolLoader |
@@ -841,7 +843,7 @@ macro_rules! error { ($($arg:tt)*) => { log!(LogLevel::ERROR, $($arg)*); } }
 | `src/tui/app_controller.rs` | AppController |
 | `src/tui/views/chat_view.rs` | ChatView |
 | `src/tui/views/config_view.rs` | ConfigView |
-| `src/tui/views/debug_view.rs` | **已移除** (由 Log 模块替代) |
+| `src/tui/views/debug_view.rs` | **已移除** (由 swiftforge-log 替代) |
 
 ### Integration
 

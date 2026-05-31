@@ -5,7 +5,7 @@ use crossterm::{event::{self, Event}, execute};
 use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use tokio::runtime::Builder;
-use tracing::{debug, info, trace};
+use swiftforge_log::{debug, info, trace};
 
 use crate::core::{Agent, AgentConfig, AgentRole};
 use swiftforge_providers::{OpenAIProvider, AnthropicProvider, OllamaProvider, DeepSeekProvider, MiniMaxProvider, CustomProvider};
@@ -22,11 +22,10 @@ pub struct AppController {
     runtime: tokio::runtime::Runtime,
     current_view: Box<dyn View>,
     should_quit: bool,
-    debug_rx: Option<mpsc::Receiver<String>>,
 }
 
 impl AppController {
-    pub fn new(show_debug: bool) -> Result<Self> {
+    pub fn new() -> Result<Self> {
         let runtime = Builder::new_current_thread()
             .enable_all()
             .build()
@@ -99,20 +98,12 @@ impl AppController {
             .with_tool_registry(Arc::clone(&tool_registry));
 
         let config = ConfigManager::new();
-        let context = AppContext::new(agent, config, tool_registry, show_debug);
+        let context = AppContext::new(agent, config, tool_registry);
         let ui_state = UIState::new();
 
         let provider = context.config.lock().unwrap().get_provider().to_string();
         let model = context.config.lock().unwrap().get_model(&provider).to_string();
         let current_view: Box<dyn View> = Box::new(ChatView::new(&provider, &model));
-
-        let debug_rx = if show_debug {
-            let (tx, rx) = mpsc::channel();
-            *ui_state.debug_tx.lock().unwrap() = Some(tx);
-            Some(rx)
-        } else {
-            None
-        };
 
         Ok(Self {
             context,
@@ -120,7 +111,6 @@ impl AppController {
             runtime,
             current_view,
             should_quit: false,
-            debug_rx,
         })
     }
 
@@ -131,19 +121,19 @@ impl AppController {
         let backend = CrosstermBackend::new(stdout);
         let mut terminal = Terminal::new(backend)?;
 
-        info!("Application started");
+        info!("[app_controller]", "Application started");
 
         loop {
-            trace!("loop: drawing");
+            trace!("[app_controller]", "loop: drawing");
             terminal.draw(|f| {
                 self.current_view.render(f, f.size(), &self.context, &self.ui_state);
             })?;
 
             if event::poll(Duration::from_millis(50))? {
                 if let Event::Key(key) = event::read()? {
-                    trace!("loop: key event {:?}", key);
+                    trace!("[app_controller]", "loop: key event {:?}", key);
                     if let Some(action) = self.current_view.handle_key(key, &self.context) {
-                        info!("Action: {:?}", action);
+                        info!("[app_controller]", "Action: {:?}", action);
                         self.handle_action(action)?;
 
                         if self.should_quit {
@@ -154,7 +144,6 @@ impl AppController {
             }
 
             self.process_agent_response();
-            self.process_debug_rx();
         }
 
         execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
@@ -164,7 +153,7 @@ impl AppController {
     }
 
     fn handle_action(&mut self, action: Action) -> Result<()> {
-        info!(action = ?action, "handle_action");
+        info!("[app_controller]", "handle_action: {:?}", action);
 
         match action {
             Action::SendMessage(msg) => {
@@ -222,8 +211,6 @@ impl AppController {
             Action::FetchModels => {
                 self.spawn_fetch_models();
             }
-            Action::ToggleDebug => {
-            }
             _ => {}
         }
 
@@ -243,7 +230,7 @@ impl AppController {
     }
 
     fn spawn_agent_task(&mut self, msg: String) {
-        trace!(msg_len = msg.len(), "SPAWN: spawn_agent_task called");
+        trace!("[app_controller]", "SPAWN: spawn_agent_task called, msg_len={}", msg.len());
         let runtime = self.runtime.handle().clone();
 
         let (tx, rx) = mpsc::channel();
@@ -254,48 +241,29 @@ impl AppController {
         let _base_url = self.context.config.lock().unwrap().get_base_url(&provider_name);
         let _model = self.context.config.lock().unwrap().get_model(&provider_name).to_string();
         let agent = self.context.agent.clone();
-        let debug_path = self.context.debug_log_path.clone();
 
         let streaming_text = Arc::clone(&self.ui_state.streaming_text);
-        let debug_messages = Arc::clone(&self.ui_state.debug_messages);
         let finalized_message = Arc::clone(&self.ui_state.finalized_message);
-        let debug_tx = self.ui_state.debug_tx.clone();
 
         runtime.spawn(async move {
-            debug!(provider = %provider_name, "SPAWN: task started");
+            debug!("[app_controller]", "SPAWN: task started, provider={}", provider_name);
 
             let final_agent = agent;
 
             {
-                if let Ok(mut msgs) = debug_messages.lock() {
-                    msgs.push(format!("Starting request to {}", provider_name));
-                    if msgs.len() > 100 {
-                        msgs.remove(0);
-                    }
-                }
                 if let Ok(mut streaming) = streaming_text.lock() {
                     *streaming = None;
                 }
             }
 
-            let debug_sender = debug_tx.lock().unwrap().take();
-            trace!(debug_sender_is_some = debug_sender.is_some(), "SPAWN: before run_agent_loop");
             let result = final_agent.run_agent_loop(
                 &msg,
                 5,
-                debug_path.map(|p| p.to_string_lossy().to_string()),
-                debug_sender,
                 Some(tx),
             ).await;
 
             match result {
                 Ok(response) => {
-                    if let Ok(mut msgs) = debug_messages.lock() {
-                        msgs.push(format!("Response length: {}", response.len()));
-                        if msgs.len() > 100 {
-                            msgs.remove(0);
-                        }
-                    }
                     if !response.is_empty() {
                         if let Ok(mut finalized) = finalized_message.lock() {
                             *finalized = Some(("assistant".to_string(), response));
@@ -303,12 +271,6 @@ impl AppController {
                     }
                 }
                 Err(e) => {
-                    if let Ok(mut msgs) = debug_messages.lock() {
-                        msgs.push(format!("Error: {}", e));
-                        if msgs.len() > 100 {
-                            msgs.remove(0);
-                        }
-                    }
                     let partial = streaming_text.lock()
                         .map(|mut s| s.take().unwrap_or_default())
                         .unwrap_or_default();
@@ -372,7 +334,7 @@ impl AppController {
         };
 
         if let Some((role, content)) = finalized_msg {
-            debug!(role = %role, content_len = content.len(), "FINALIZED: adding to messages");
+            debug!("[app_controller]", "FINALIZED: adding to messages, role={}, content_len={}", role, content.len());
             if let Some(chat_view) = self.get_chat_view_mut() {
                 chat_view.state.add_message(&role, &content);
                 chat_view.state.is_streaming = false;
@@ -386,11 +348,11 @@ impl AppController {
                     while let Ok(result) = rx.try_recv() {
                         match result {
                             Ok(chunk) => {
-                                debug!(chunk_len = chunk.len(), "CHUNK: received");
+                                debug!("[app_controller]", "CHUNK: received, chunk_len={}", chunk.len());
                                 chunks.push(chunk);
                             }
                             Err(e) => {
-                                debug!("CHUNK: channel error: {:?}", e);
+                                debug!("[app_controller]", "CHUNK: channel error: {:?}", e);
                             }
                         }
                     }
@@ -400,7 +362,7 @@ impl AppController {
         };
 
         if !streaming_chunks.is_empty() {
-            trace!(chunk_count = streaming_chunks.len(), "CHUNKS: adding to messages");
+            trace!("[app_controller]", "CHUNKS: adding to messages, chunk_count={}", streaming_chunks.len());
             if let Some(chat_view) = self.get_chat_view_mut() {
                 for chunk in streaming_chunks {
                     chat_view.state.add_message("assistant", &chunk);
@@ -410,33 +372,5 @@ impl AppController {
 
         let _ = self.ui_state.streaming_text.lock()
             .map(|mut s| s.take());
-    }
-
-    fn process_debug_rx(&mut self) {
-        if let Some(ref rx) = self.debug_rx {
-            while let Ok(msg) = rx.try_recv() {
-                if let Ok(mut messages) = self.ui_state.debug_messages.lock() {
-                    messages.push(msg);
-                    if messages.len() > 100 {
-                        messages.remove(0);
-                    }
-                }
-            }
-        }
-    }
-
-    fn log(&self, msg: &str) {
-        if let Some(ref path) = self.context.debug_log_path {
-            let timestamp = chrono::Local::now().format("%H:%M:%S%.3f");
-            let formatted = format!("[{}] {}", timestamp, msg);
-            let _ = std::fs::OpenOptions::new()
-                .append(true)
-                .open(path)
-                .and_then(|mut f| {
-                    use std::io::Write;
-                    writeln!(f, "{}", formatted)
-                });
-        }
-        self.ui_state.add_debug(msg.to_string());
     }
 }

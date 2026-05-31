@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "libs/swiftforge-log",
     "libs/swiftforge-types",
     "libs/swiftforge-task",
     "libs/swiftforge-tools",

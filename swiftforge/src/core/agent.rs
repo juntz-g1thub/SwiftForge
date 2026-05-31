@@ -4,6 +4,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
+use swiftforge_log::{info, debug, warn, error, LogLevel};
 use swiftforge_task::{TaskScheduler, Task, MessageBus, AgentMessage};
 use swiftforge_provider_core::{DynLLMProvider, DynToolCallingProvider, LLMProvider, ToolCallingProvider};
 use swiftforge_types::{Message, ModelResponse, Usage, ToolRegistry, ToolCall, ToolResult, ToolDefinition};
@@ -140,64 +141,26 @@ impl Agent {
         self.llm_provider.chat(messages).await.map_err(|e: swiftforge_provider_core::ProviderError| anyhow::anyhow!("{:?}", e))
     }
 
-    pub async fn chat_with_tools(&self, messages: Vec<Message>, debug_log: Option<String>, debug_ui: Option<std::sync::mpsc::Sender<String>>) -> Result<ModelResponse> {
-        let log = |msg: &str| {
-            if let Some(ref path) = debug_log {
-                let timestamp = chrono::Local::now().format("%H:%M:%S%.3f");
-                let formatted = format!("[{}] PROVIDER: {}", timestamp, msg);
-                let _ = std::fs::OpenOptions::new()
-                    .append(true)
-                    .open(path)
-                    .and_then(|mut f| {
-                        use std::io::Write;
-                        writeln!(f, "{}", formatted)
-                    });
-            }
-            if let Some(ref tx) = debug_ui {
-                let timestamp = chrono::Local::now().format("%H:%M:%S%.3f");
-                let formatted = format!("[{}] PROVIDER: {}", timestamp, msg);
-                let _ = tx.send(formatted);
-            }
-        };
-        log(&format!("chat_with_tools called"));
+    pub async fn chat_with_tools(&self, messages: Vec<Message>) -> Result<ModelResponse> {
+        debug!("[provider]", "chat_with_tools called");
         let provider = self.tool_provider.as_ref()
             .ok_or_else(|| anyhow::anyhow!("No tool-calling provider configured"))?;
-        log("Got provider");
+        debug!("[provider]", "Got provider");
         let tools = self.get_tool_definitions();
-        log(&format!("Got {} tools", tools.len()));
+        debug!("[provider]", "Got {} tools", tools.len());
         provider.chat_with_tools(messages, tools).await.map_err(|e: swiftforge_provider_core::ProviderError| anyhow::anyhow!("{:?}", e))
     }
 
-    pub async fn chat_with_tools_streaming<F>(&self, messages: Vec<Message>, debug_log: Option<String>, debug_ui: Option<std::sync::mpsc::Sender<String>>, on_chunk: F) -> Result<ModelResponse>
+    pub async fn chat_with_tools_streaming<F>(&self, messages: Vec<Message>, on_chunk: F) -> Result<ModelResponse>
         where F: FnMut(String) + Send + Sync + 'static
     {
-        let log = |msg: &str| {
-            if let Some(ref path) = debug_log {
-                let timestamp = chrono::Local::now().format("%H:%M:%S%.3f");
-                let formatted = format!("[{}] PROVIDER: {}", timestamp, msg);
-                let _ = std::fs::OpenOptions::new()
-                    .append(true)
-                    .open(path)
-                    .and_then(|mut f| {
-                        use std::io::Write;
-                        writeln!(f, "{}", formatted)
-                    });
-            }
-            if let Some(ref tx) = debug_ui {
-                let timestamp = chrono::Local::now().format("%H:%M:%S%.3f");
-                let formatted = format!("[{}] PROVIDER: {}", timestamp, msg);
-                let _ = tx.send(formatted);
-            }
-        };
-        log(&format!("chat_with_tools_streaming called"));
+        debug!("[provider]", "chat_with_tools_streaming called");
         let provider = self.tool_provider.as_ref()
             .ok_or_else(|| anyhow::anyhow!("No tool-calling provider configured"))?;
-        log("Got provider");
+        debug!("[provider]", "Got provider");
         let tools = self.get_tool_definitions();
-        log(&format!("Got {} tools", tools.len()));
+        debug!("[provider]", "Got {} tools", tools.len());
 
-        let debug_ui_clone = debug_ui.clone();
-        let debug_log_clone = debug_log.clone();
         let accumulated = Arc::new(std::sync::Mutex::new(String::new()));
         let accumulated_clone = accumulated.clone();
         let on_chunk = Arc::new(std::sync::Mutex::new(on_chunk));
@@ -224,22 +187,6 @@ impl Agent {
             if let Ok(mut cb) = on_chunk_clone.lock() {
                 cb(chunk.clone());
             }
-            if let Some(ref tx) = debug_ui_clone {
-                let timestamp = chrono::Local::now().format("%H:%M:%S%.3f");
-                let formatted = format!("[{}] STREAM: {}", timestamp, chunk);
-                let _ = tx.send(formatted);
-            }
-            if let Some(ref path) = debug_log_clone {
-                let timestamp = chrono::Local::now().format("%H:%M:%S%.3f");
-                let formatted = format!("[{}] STREAM: {}", timestamp, chunk);
-                let _ = std::fs::OpenOptions::new()
-                    .append(true)
-                    .open(path)
-                    .and_then(|mut f| {
-                        use std::io::Write;
-                        writeln!(f, "{}", formatted)
-                    });
-            }
         });
 
         provider.stream_chat_with_tools(messages, tools, on_chunk_wrapper).await.map_err(|e: swiftforge_provider_core::ProviderError| anyhow::anyhow!("{:?}", e))?;
@@ -253,33 +200,8 @@ impl Agent {
         Ok(response)
     }
 
-    pub async fn run_agent_loop(&self, initial_message: &str, max_iterations: usize, debug_log: Option<String>, debug_ui: Option<std::sync::mpsc::Sender<String>>, stream_ui: Option<std::sync::mpsc::Sender<Result<String>>>) -> Result<String> {
-        let log = |msg: &str| {
-            if let Some(ref path) = debug_log {
-                let timestamp = chrono::Local::now().format("%H:%M:%S%.3f");
-                let formatted = format!("[{}] AGENT: {}", timestamp, msg);
-                let _ = std::fs::OpenOptions::new()
-                    .append(true)
-                    .open(path)
-                    .and_then(|mut f| {
-                        use std::io::Write;
-                        writeln!(f, "{}", formatted)
-                    });
-            }
-            if let Some(ref tx) = debug_ui {
-                let timestamp = chrono::Local::now().format("%H:%M:%S%.3f");
-                let formatted = format!("[{}] AGENT: {}", timestamp, msg);
-                let _ = tx.send(formatted);
-            }
-        };
-
-        let _stream = |msg: &str, tx: &Option<std::sync::mpsc::Sender<String>>| {
-            if let Some(ref t) = tx {
-                let _ = t.send(msg.to_string());
-            }
-        };
-
-        log(&format!("run_agent_loop started with: {}", initial_message));
+    pub async fn run_agent_loop(&self, initial_message: &str, max_iterations: usize, stream_ui: Option<std::sync::mpsc::Sender<Result<String>>>) -> Result<String> {
+        info!("[agent]", "run_agent_loop started with: {}", initial_message);
         let mut messages = vec![
             Message {
                 role: "user".to_string(),
@@ -291,7 +213,7 @@ impl Agent {
         let mut tool_summary = Vec::new();
 
         for i in 0..max_iterations {
-            log(&format!("Agent loop iteration {}", i + 1));
+            info!("[agent]", "Agent loop iteration {}", i + 1);
 
             let stream_ui_clone = stream_ui.clone();
             let on_chunk = move |chunk: String| {
@@ -300,12 +222,12 @@ impl Agent {
                 }
             };
 
-            let response = self.chat_with_tools_streaming(messages.clone(), debug_log.clone(), debug_ui.clone(), on_chunk).await?;
+            let response = self.chat_with_tools_streaming(messages.clone(), on_chunk).await?;
 
-            log(&format!("Got response, content len: {}, tool_calls: {:?}",
+            info!("[agent]", "Got response, content len: {}, tool_calls: {:?}",
                 response.content.len(),
                 response.tool_calls.as_ref().map(|tc| tc.len())
-            ));
+            );
 
             if !response.content.is_empty() {
                 full_response.push_str(&response.content);
@@ -313,14 +235,14 @@ impl Agent {
 
             let tool_calls = if let Some(ref tc) = response.tool_calls {
                 let calls = self.parse_tool_calls_from_json(tc);
-                log(&format!("Parsed {} tool_calls from response.tool_calls JSON", calls.len()));
+                info!("[agent]", "Parsed {} tool_calls from response.tool_calls JSON", calls.len());
                 calls
             } else {
-                log("No tool_calls in response JSON, parsing from content...");
+                info!("[agent]", "No tool_calls in response JSON, parsing from content...");
                 let calls = self.parse_tool_calls(&response.content);
-                log(&format!("Parsed {} tool_calls from content", calls.len()));
+                info!("[agent]", "Parsed {} tool_calls from content", calls.len());
                 if calls.is_empty() && !response.content.is_empty() {
-                    log(&format!("Content preview: {}", response.content.chars().take(200).collect::<String>()));
+                    info!("[agent]", "Content preview: {}", response.content.chars().take(200).collect::<String>());
                 }
                 calls
             };
@@ -365,7 +287,7 @@ impl Agent {
                     let _ = tx.send(Ok(format!("[TOOL_RESULT] {}", tool_result_text)));
                 }
 
-                log(&format!("Tool executed: {}", tool_result_text.chars().take(100).collect::<String>()));
+                info!("[agent]", "Tool executed: {}", tool_result_text.chars().take(100).collect::<String>());
             }
         }
 
@@ -388,7 +310,7 @@ impl Agent {
         let Some(task) = scheduler.get_next_task().await else {
             return Ok(None);
         };
-        tracing::info!("Agent {} processing task: {}", self.name(), task.description);
+        info!("[agent]", "Agent {} processing task: {}", self.name(), task.description);
         Ok(Some(task))
     }
 
