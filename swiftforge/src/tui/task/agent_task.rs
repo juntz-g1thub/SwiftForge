@@ -1,4 +1,4 @@
-use crate::tui::task::events::{AgentTaskState, FailedState, RunningState, TaskEvent, TaskType};
+use crate::tui::task::events::{AgentTaskState, TaskType};
 use uuid::Uuid;
 
 #[derive(Debug)]

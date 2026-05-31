@@ -1,11 +1,11 @@
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::{Arc, mpsc};
 use std::time::Duration;
 use anyhow::Result;
 use crossterm::{event::{self, Event}, execute};
 use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use tokio::runtime::Builder;
-use tracing::{debug, error, info, trace};
+use tracing::{debug, info, trace};
 
 use crate::core::{Agent, AgentConfig, AgentRole};
 use swiftforge_providers::{OpenAIProvider, AnthropicProvider, OllamaProvider, DeepSeekProvider, MiniMaxProvider, CustomProvider};
@@ -46,7 +46,7 @@ impl AppController {
         let api_key = config.get_api_key(&provider_name).unwrap_or_default();
         let base_url = config.get_base_url(&provider_name);
 
-        let mut registry = ProviderRegistry::new();
+        let _registry = ProviderRegistry::new();
         let llm_provider: swiftforge_provider_core::DynLLMProvider;
         let tool_provider: Option<swiftforge_provider_core::DynToolCallingProvider>;
 
@@ -250,9 +250,9 @@ impl AppController {
         *self.ui_state.response_receiver.lock().unwrap() = Some(rx);
 
         let provider_name = self.context.config.lock().unwrap().get_provider().to_string();
-        let api_key = self.context.config.lock().unwrap().get_api_key(&provider_name);
-        let base_url = self.context.config.lock().unwrap().get_base_url(&provider_name);
-        let model = self.context.config.lock().unwrap().get_model(&provider_name).to_string();
+        let _api_key = self.context.config.lock().unwrap().get_api_key(&provider_name);
+        let _base_url = self.context.config.lock().unwrap().get_base_url(&provider_name);
+        let _model = self.context.config.lock().unwrap().get_model(&provider_name).to_string();
         let agent = self.context.agent.clone();
         let debug_path = self.context.debug_log_path.clone();
 

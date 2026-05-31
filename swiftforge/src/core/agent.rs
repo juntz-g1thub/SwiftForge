@@ -168,7 +168,7 @@ impl Agent {
         provider.chat_with_tools(messages, tools).await.map_err(|e: swiftforge_provider_core::ProviderError| anyhow::anyhow!("{:?}", e))
     }
 
-    pub async fn chat_with_tools_streaming<F>(&self, messages: Vec<Message>, debug_log: Option<String>, debug_ui: Option<std::sync::mpsc::Sender<String>>, mut on_chunk: F) -> Result<ModelResponse>
+    pub async fn chat_with_tools_streaming<F>(&self, messages: Vec<Message>, debug_log: Option<String>, debug_ui: Option<std::sync::mpsc::Sender<String>>, on_chunk: F) -> Result<ModelResponse>
         where F: FnMut(String) + Send + Sync + 'static
     {
         let log = |msg: &str| {
@@ -273,7 +273,7 @@ impl Agent {
             }
         };
 
-        let stream = |msg: &str, tx: &Option<std::sync::mpsc::Sender<String>>| {
+        let _stream = |msg: &str, tx: &Option<std::sync::mpsc::Sender<String>>| {
             if let Some(ref t) = tx {
                 let _ = t.send(msg.to_string());
             }

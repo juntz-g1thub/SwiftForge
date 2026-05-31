@@ -1,7 +1,5 @@
-use anyhow::Result;
 use clap::Parser;
 use rust_agent_platform::tui::app_controller::AppController;
-use std::io;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 #[derive(Parser, Debug)]
@@ -29,7 +27,7 @@ fn setup_tracing(debug_mode: bool) -> tracing_appender::non_blocking::WorkerGuar
         .expect("Failed to open log file");
     let (non_blocking, guard) = tracing_appender::non_blocking(file);
 
-    let level = if debug_mode {
+    let _level = if debug_mode {
         tracing::Level::TRACE
     } else {
         tracing::Level::INFO

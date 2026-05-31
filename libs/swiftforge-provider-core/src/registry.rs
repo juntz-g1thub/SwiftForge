@@ -1,4 +1,3 @@
-use crate::error::ProviderError;
 use crate::traits::{DynLLMProvider, DynToolCallingProvider, LLMProvider, ToolCallingProvider};
 use std::collections::HashMap;
 use std::sync::Arc;

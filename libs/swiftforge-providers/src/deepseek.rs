@@ -21,6 +21,7 @@ impl Clone for DeepSeekProvider {
     }
 }
 
+#[allow(dead_code)]
 /// Helper function to write log entries consistently
 fn write_log(entry: &str) {
     let timestamp = chrono::Local::now().format("%H:%M:%S%.3f");
@@ -34,6 +35,7 @@ fn write_log(entry: &str) {
     }
 }
 
+#[allow(dead_code)]
 /// Log request body with pretty-printed JSON
 fn log_request(body: &serde_json::Value) {
     if let Ok(json_str) = serde_json::to_string_pretty(body) {
@@ -41,12 +43,14 @@ fn log_request(body: &serde_json::Value) {
     }
 }
 
+#[allow(dead_code)]
 /// Log raw SSE chunk before parsing
 fn log_raw_chunk(line: &str) {
     let trimmed = line.trim();
     write_log(&format!("RAW: {}", trimmed));
 }
 
+#[allow(dead_code)]
 /// Log parse state for each delta
 fn log_parse_state(reasoning: Option<&str>, content: Option<&str>, tool_calls_count: usize, is_thinking: bool) {
     let reasoning_preview = reasoning

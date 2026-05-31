@@ -226,7 +226,7 @@ impl ChatView {
 }
 
 impl View for ChatView {
-    fn render(&mut self, f: &mut Frame, area: Rect, ctx: &AppContext, ui_state: &UIState) {
+    fn render(&mut self, f: &mut Frame, area: Rect, _ctx: &AppContext, ui_state: &UIState) {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -241,7 +241,7 @@ impl View for ChatView {
         self.render_status(f, chunks[2]);
     }
 
-    fn handle_key(&mut self, key: KeyEvent, ctx: &AppContext) -> Option<Action> {
+    fn handle_key(&mut self, key: KeyEvent, _ctx: &AppContext) -> Option<Action> {
         if self.state.is_streaming {
             match key.code {
                 KeyCode::Up => {

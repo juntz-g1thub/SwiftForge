@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use swiftforge_provider_core::{LLMProvider, ToolCallingProvider, ProviderError};
+use swiftforge_provider_core::{LLMProvider, ToolCallingProvider};
 use swiftforge_types::{ModelResponse, Usage, Message, ToolDefinition};
 use swiftforge_provider_core::error::Result;
 use anyhow::Context;
