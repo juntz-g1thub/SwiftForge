@@ -6,9 +6,18 @@ MCP (Model Context Protocol) 客户端库，通过适配层统一接入 ToolRegi
 
 | 文档 | 说明 |
 |------|------|
-| `docs/2026-05-23-mcp-tool-unified-design.md` | MCP 工具统一架构设计（旧版） |
-| `docs/2026-06-01-mcp-tool-unified-architecture-design.md` | MCP 工具统一架构设计（已批准） |
+| `docs/2026-05-23-mcp-tool-unified-design.md` | MCP 工具统一架构设计（旧版，已废弃） |
+| `docs/2026-06-01-mcp-tool-unified-architecture-design.md` | MCP 工具统一架构设计 ✅ 已实现 |
 | `docs/specs/2026-06-01-mcp-tool-unified-implementation-plan.md` | 详细实现计划 |
+
+## 状态
+
+| 组件 | 状态 |
+|------|------|
+| `McpToolAdapter` | ✅ 已实现 |
+| `McpConnectionPool` | ✅ 已实现 |
+| `McpToolLoader` | ✅ 已实现 |
+| AppController 集成 | ✅ 已实现 |
 
 ## 概述
 

@@ -1,10 +1,10 @@
 # MCP 工具统一架构设计
 
-> 文档版本: 1.0
+> 文档版本: 0.9
 > 生成日期: 2026-05-23
 > 分支: feature/tui-refactor
 > Worktree: `.worktrees/feat-tui-refactor/`
-> 状态: **初稿 - 待审批**
+> 状态: **已废弃 - 被 2026-06-01-mcp-tool-unified-architecture-design.md 替代**
 
 ---
 

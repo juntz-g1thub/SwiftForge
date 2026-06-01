@@ -20,12 +20,12 @@
 
 | ID | 任务 | 描述 | 优先级 | 状态 | 关联文档 |
 |----|------|------|--------|------|----------|
-| T1 | Log 模块 | 创建 `src/log/` 统一日志系统 | 高 | 📋 规划中 | [logging-refactoring-design](../specs/2026-05-22-logging-refactoring-design.md) |
-| T2 | Debug Panel 移除 | TUI DebugPanel 移除，集成 Log 模块 | 中 | 📋 规划中 | 同上 |
-| T3 | McpToolAdapter | MCP 工具适配器，实现 Tool trait | 高 | 📋 规划中 | [mcp-tool-unified-design](../specs/2026-05-23-mcp-tool-unified-design.md) |
-| T4 | McpConnectionPool | MCP 连接池管理 | 高 | 📋 规划中 | 同上 |
-| T5 | McpToolLoader | MCP 工具加载器 | 高 | 📋 规划中 | 同上 |
-| T6 | AppController MCP 初始化 | MCP 初始化逻辑集成到 AppController | 中 | 📋 规划中 | 同上 |
+| T1 | Log 模块 | 创建 `swiftforge-log` 库统一日志系统 | 高 | ✅ 已完成 | [logging-refactoring-design](../specs/2026-05-22-logging-refactoring-design.md) |
+| T2 | Debug Panel 移除 | TUI DebugPanel 移除，集成 Log 模块 | 中 | ✅ 已完成 | 同上 |
+| T3 | McpToolAdapter | MCP 工具适配器，实现 Tool trait | 高 | ✅ 已完成 | [mcp-tool-unified-design](../specs/2026-05-23-mcp-tool-unified-design.md) |
+| T4 | McpConnectionPool | MCP 连接池管理 | 高 | ✅ 已完成 | 同上 |
+| T5 | McpToolLoader | MCP 工具加载器 | 高 | ✅ 已完成 | 同上 |
+| T6 | AppController MCP 初始化 | MCP 初始化逻辑集成到 AppController | 中 | ✅ 已完成 | 同上 |
 | T7 | 并发工具执行 | `execute_independent_tool_calls` 实现 | 中 | 📋 规划中 | - |
 | T8 | DeepSeek reasoning 累积 | reasoning_history 管理和反馈 | 高 | 📋 规划中 | - |
 | T9 | Session 集成 | Session 管理器与 Agent 集成 | 中 | 📋 规划中 | - |
@@ -272,15 +272,15 @@ reasoning_history: Arc<Mutex<Vec<String>>>
 
 | 模块 | 状态 | 结论 |
 |------|------|------|
-| TUI Frontend | ⚠️ 改进中 | MVC重构完成，DebugPanel由Log替代 |
+| TUI Frontend | ✅ 完整 | MVC重构完成，DebugPanel由Log替代 |
 | Provider 接口 | ⚠️ 部分解决 | DeepSeek解析已实现，reasoning待累积 |
 | Agent Loop | ⚠️ 待改进 | 并发工具执行、reasoning累积 |
 | Session 管理 | ❌ 未解决 | 需要设计context window管理方案 |
-| Tool System | ⚠️ 改进中 | MCP统一架构设计中 |
+| Tool System | ✅ 完整 | MCP统一架构已完成，适配Tool trait |
 | Platform | ✅ 已实现 | IntentGate/Hooks/Skill/Boulder完整 |
-| Orchestration | ❌ 未解决 | TaskScheduler/MessageBus未使用 |
-| MCP Client | ⚠️ 改进中 | 协议已实现，适配层设计中 |
-| Log Module | 📋 规划中 | 替代DebugPanel，统一日志 |
+| Orchestration | ⚠️ 部分 | TaskScheduler/MessageBus已定义但未集成 |
+| MCP Client | ✅ 完整 | McpToolAdapter/Pool/Loader全部完成 |
+| Log Module | ✅ 已实现 | swiftforge-log 库完成，替代DebugPanel |
 
 ### 2.2 详细进度
 
@@ -294,10 +294,10 @@ reasoning_history: Arc<Mutex<Vec<String>>>
 - ✅ AppContext/UIState/ViewState 分离
 - ✅ T12 分栏显示数据结构 (MessageBlock)
 - ✅ T12 render_reasoning_block/render_tool_call_block
+- ✅ DebugPanel 移除 (T2) - Log 模块替代
+- ✅ Log 模块集成 (T1) - swiftforge-log 库
 
 **待完成**:
-- 📋 DebugPanel 移除 (T2) - 依赖 Log 模块
-- 📋 Log 模块集成 (T1)
 - 📋 完整的流式输出到 MessageBlock 映射
 - 📋 折叠 UI 优化
 
@@ -353,17 +353,16 @@ reasoning_history: Arc<Mutex<Vec<String>>>
 
 #### Tool System
 
-**当前状态**: ⚠️ 改进中
+**当前状态**: ✅ 完整
 
 **已完成**:
 - ✅ Tool trait 定义
 - ✅ ToolRegistry 注册机制
 - ✅ 5个内置工具
+- ✅ MCP 统一架构 (T3, T4, T5, T6) - McpToolAdapter/Pool/Loader
+- ✅ ToolRegistry: Clone 支持 (Arc<dyn Tool>)
 
-**待完成**:
-- 📋 MCP 统一架构 (T3, T4, T5, T6)
-
-**结论**: MCP统一架构设计中
+**结论**: MCP统一架构已完成
 
 ---
 
@@ -383,14 +382,17 @@ reasoning_history: Arc<Mutex<Vec<String>>>
 
 #### Orchestration
 
-**当前状态**: ❌ 未解决
+**当前状态**: ⚠️ 部分
 
-**问题**:
-- TaskScheduler 定义但未使用
-- MessageBus 定义但未使用
+**已完成**:
+- ✅ TaskScheduler 定义
+- ✅ MessageBus 定义
+- ✅ Agent 支持 with_scheduler/with_message_bus
 
 **待完成**:
-- 📋 Orchestration 集成 (T10)
+- 📋 Orchestration 集成 (T10) - AppController 集成调度器
+
+**结论**: TaskScheduler/MessageBus已定义，Agent支持但未集成
 
 **结论**: TaskScheduler/MessageBus未使用
 
@@ -398,54 +400,52 @@ reasoning_history: Arc<Mutex<Vec<String>>>
 
 #### MCP Client
 
-**当前状态**: ⚠️ 改进中
+**当前状态**: ✅ 完整
 
 **已完成**:
 - ✅ protocol.rs - JSON-RPC 2.0 协议
 - ✅ client.rs - HTTP POST 客户端
+- ✅ McpToolAdapter (T3)
+- ✅ McpConnectionPool (T4)
+- ✅ McpToolLoader (T5)
+- ✅ AppController 集成 (T6)
 
-**待完成**:
-- 📋 McpToolAdapter (T3)
-- 📋 McpConnectionPool (T4)
-- 📋 McpToolLoader (T5)
-
-**结论**: 协议已实现，适配层设计中
+**结论**: 协议+适配层全部完成
 
 ---
 
 #### Log Module
 
-**当前状态**: 📋 规划中
+**当前状态**: ✅ 已实现
 
-**目标**:
-- 替代 DebugPanel
-- 统一日志系统
-- 多级别支持
+**已完成**:
+- ✅ swiftforge-log 库创建
+- ✅ 多级别支持: TRACE, DEBUG, INFO, WARN, ERROR
+- ✅ 仅文件输出
+- ✅ 全局宏简化: `info!()`, `debug!()` 等
+- ✅ DebugPanel 移除 (T2) - Log 模块替代
 
-**待完成**:
-- 📋 Log 模块实现 (T1)
-
-**结论**: 替代DebugPanel，统一日志
+**结论**: swiftforge-log 库完整，替代DebugPanel
 
 ---
 
 ## 三、里程碑
 
-### M1: Log 模块上线
+### ✅ M1: Log 模块上线 (已完成)
 - T1 Log 模块创建
 - T2 DebugPanel 移除
 
-### M2: MCP 工具统一
+### ✅ M2: MCP 工具统一 (已完成)
 - T3 McpToolAdapter
 - T4 McpConnectionPool
 - T5 McpToolLoader
 - T6 AppController MCP 初始化
 
-### M3: Agent Loop 增强
+### ⏳ M3: Agent Loop 增强 (待完成)
 - T7 并发工具执行
 - T8 DeepSeek reasoning 累积
 
-### M4: 集成完善
+### ⏳ M4: 集成完善 (待完成)
 - T9 Session 集成
 - T10 Orchestration 集成
 
@@ -456,6 +456,7 @@ reasoning_history: Arc<Mutex<Vec<String>>>
 | 日期 | 版本 | 变更内容 |
 |------|------|----------|
 | 2026-05-23 | 1.0 | 初始版本，任务清单和讨论进度从主架构文档分离 |
+| 2026-06-01 | 1.1 | M1/M2 里程碑完成：Log模块、MCP统一架构全部完成 |
 
 ---
 

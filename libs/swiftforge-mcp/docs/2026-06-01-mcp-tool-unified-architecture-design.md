@@ -4,7 +4,7 @@
 > 生成日期: 2026-06-01
 > 分支: feat/tui-refactor
 > Worktree: `.worktrees/feat-tui-refactor/`
-> 状态: **已批准**
+> 状态: **已实现**
 
 ---
 
