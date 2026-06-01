@@ -41,7 +41,7 @@ impl McpConnectionPool {
         let clients = self.clients.read().await;
         let client = clients.get(name)
             .ok_or_else(|| anyhow!("MCP server '{}' not found", name))?;
-        let _ = client.initialize(client_name, version).await?;
+        client.initialize(client_name, version).await?;
         Ok(())
     }
 

@@ -31,7 +31,7 @@ impl AppController {
             .build()
             .expect("Failed to create tokio runtime");
 
-        let mut tool_registry = ToolRegistry::new();
+                let mut tool_registry = ToolRegistry::new();
         tool_registry.register(BashTool::new());
         tool_registry.register(ReadTool::new());
         tool_registry.register(WriteTool::new());
@@ -98,7 +98,7 @@ impl AppController {
             .with_tool_registry(Arc::clone(&tool_registry));
 
         let config = ConfigManager::new();
-        let context = AppContext::new(agent, config, tool_registry);
+        let context = AppContext::new(agent, config, Arc::clone(&tool_registry));
         let ui_state = UIState::new();
 
         let provider = context.config.lock().unwrap().get_provider().to_string();

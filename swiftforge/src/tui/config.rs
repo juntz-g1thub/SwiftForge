@@ -16,6 +16,7 @@ pub struct AppConfig {
     pub providers: std::collections::HashMap<String, ProviderSettings>,
     pub system_prompt: Option<String>,
     pub context_window: usize,
+    pub mcp_url: Option<String>,
 }
 
 impl Default for AppConfig {
@@ -72,6 +73,7 @@ impl Default for AppConfig {
             providers,
             system_prompt: None,
             context_window: 8000,
+            mcp_url: None,
         }
     }
 }
@@ -228,6 +230,15 @@ impl ConfigManager {
 
     pub fn set_context_window(&mut self, window: usize) {
         self.config.context_window = window;
+        self.dirty = true;
+    }
+
+    pub fn get_mcp_url(&self) -> Option<String> {
+        self.config.mcp_url.clone()
+    }
+
+    pub fn set_mcp_url(&mut self, url: Option<String>) {
+        self.config.mcp_url = url;
         self.dirty = true;
     }
 }

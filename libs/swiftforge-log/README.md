@@ -2,6 +2,12 @@
 
 A lightweight file-based logging library for Rust applications.
 
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| `docs/2026-05-22-logging-refactoring-design.md` | Logging library design document |
+
 ## Features
 
 - File-only logging (no stdout)
