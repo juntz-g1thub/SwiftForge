@@ -26,7 +26,7 @@
 | T4 | McpConnectionPool | MCP 连接池管理 | 高 | ✅ 已完成 | 同上 |
 | T5 | McpToolLoader | MCP 工具加载器 | 高 | ✅ 已完成 | 同上 |
 | T6 | AppController MCP 初始化 | MCP 初始化逻辑集成到 AppController | 中 | ✅ 已完成 | 同上 |
-| T7 | 并发工具执行 | `execute_independent_tool_calls` 实现 | 中 | 📋 规划中 | - |
+| T7 | 并发工具执行 | `execute_independent_tool_calls` 实现 | 中 | ✅ 已完成 | - |
 | T8 | DeepSeek reasoning 累积 | reasoning_history 管理和反馈 | 高 | 📋 规划中 | - |
 | T9 | Session 集成 | Session 管理器与 Agent 集成 | 中 | 📋 规划中 | - |
 | T10 | Orchestration 集成 | TaskScheduler/MessageBus 与 Agent 集成 | 低 | 📋 规划中 | - |
@@ -145,21 +145,18 @@ AppController::new()
 
 **描述**: 实现 `execute_independent_tool_calls` 支持工具并发执行
 
-**位置**: `core/agent.rs`
+**位置**: `swiftforge/src/core/agent.rs`
 
-**设计**:
+**实现**:
 ```rust
-pub async fn execute_independent_tool_calls(
-    &self,
-    calls: Vec<ToolCall>
-) -> Vec<ToolResult> {
-    // 分析依赖关系
-    // 无依赖工具并发执行
-    // 有依赖工具按顺序执行
+pub async fn execute_tool_calls(&self, calls: Vec<ToolCall>) -> Result<Vec<ToolResult>> {
+    let futures = calls.into_iter().map(|call| registry.execute(call));
+    let results = futures::future::join_all(futures).await;
+    Ok(results)
 }
 ```
 
-**状态**: 📋 规划中
+**状态**: ✅ 已完成
 
 ---
 
@@ -274,7 +271,7 @@ reasoning_history: Arc<Mutex<Vec<String>>>
 |------|------|------|
 | TUI Frontend | ✅ 完整 | MVC重构完成，DebugPanel由Log替代 |
 | Provider 接口 | ⚠️ 部分解决 | DeepSeek解析已实现，reasoning待累积 |
-| Agent Loop | ⚠️ 待改进 | 并发工具执行、reasoning累积 |
+| Agent Loop | ✅ 已实现 | 并发工具执行已完成，reasoning累积待完成 |
 | Session 管理 | ❌ 未解决 | 需要设计context window管理方案 |
 | Tool System | ✅ 完整 | MCP统一架构已完成，适配Tool trait |
 | Platform | ✅ 已实现 | IntentGate/Hooks/Skill/Boulder完整 |
@@ -325,10 +322,12 @@ reasoning_history: Arc<Mutex<Vec<String>>>
 
 #### Agent Loop
 
-**当前状态**: ⚠️ 待改进
+**当前状态**: ⚠️ 部分完成
+
+**已完成**:
+- ✅ 并发工具执行 (T7) - `futures::future::join_all`
 
 **待完成**:
-- 📋 并发工具执行 (T7)
 - 📋 reasoning 累积 (T8)
 
 **结论**: 并发工具执行、reasoning累积
@@ -441,9 +440,9 @@ reasoning_history: Arc<Mutex<Vec<String>>>
 - T5 McpToolLoader
 - T6 AppController MCP 初始化
 
-### ⏳ M3: Agent Loop 增强 (待完成)
-- T7 并发工具执行
-- T8 DeepSeek reasoning 累积
+### ⏳ M3: Agent Loop 增强 (进行中)
+- ✅ T7 并发工具执行
+- ⏳ T8 DeepSeek reasoning 累积
 
 ### ⏳ M4: 集成完善 (待完成)
 - T9 Session 集成
