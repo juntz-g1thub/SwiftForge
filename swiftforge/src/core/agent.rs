@@ -129,11 +129,10 @@ impl Agent {
     pub async fn execute_tool_calls(&self, calls: Vec<ToolCall>) -> Result<Vec<ToolResult>> {
         let registry = self.tool_registry.as_ref()
             .ok_or_else(|| anyhow::anyhow!("No tool registry configured"))?;
-        let mut results = Vec::new();
-        for call in calls {
-            let result = registry.execute(call).await;
-            results.push(result);
-        }
+
+        let futures = calls.into_iter().map(|call| registry.execute(call));
+        let results = futures::future::join_all(futures).await;
+
         Ok(results)
     }
 
