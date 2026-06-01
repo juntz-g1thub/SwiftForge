@@ -5,13 +5,15 @@ use crossterm::{event::{self, Event}, execute};
 use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use tokio::runtime::Builder;
-use swiftforge_log::{debug, info, trace};
+use swiftforge_log::{debug, info, trace, warn};
+use tokio::sync::Mutex as TokioMutex;
 
 use crate::core::{Agent, AgentConfig, AgentRole};
 use swiftforge_providers::{OpenAIProvider, AnthropicProvider, OllamaProvider, DeepSeekProvider, MiniMaxProvider, CustomProvider};
 use swiftforge_provider_core::ProviderRegistry;
 use swiftforge_tools::{BashTool, ReadTool, WriteTool, EditTool, GrepTool};
 use swiftforge_types::ToolRegistry;
+use swiftforge_mcp::{McpConnectionPool, McpToolLoader};
 use crate::tui::config::ConfigManager;
 
 use crate::tui::{AppContext, UIState, Action, ViewState, View, ChatView, ConfigView};
@@ -22,6 +24,8 @@ pub struct AppController {
     runtime: tokio::runtime::Runtime,
     current_view: Box<dyn View>,
     should_quit: bool,
+    mcp_pool: Option<Arc<McpConnectionPool>>,
+    mcp_loader: Option<Arc<McpToolLoader>>,
 }
 
 impl AppController {
@@ -97,7 +101,48 @@ impl AppController {
             .with_tool_provider(tool_provider)
             .with_tool_registry(Arc::clone(&tool_registry));
 
+        let mcp_pool = Arc::new(McpConnectionPool::new());
+        let mcp_loader = Arc::new(McpToolLoader::new(
+            Arc::clone(&mcp_pool),
+            Arc::clone(&tool_registry),
+        ));
+
+        let runtime_handle = runtime.handle().clone();
         let config = ConfigManager::new();
+        if let Some(mcp_url) = config.get_mcp_url() {
+            let pool = Arc::clone(&mcp_pool);
+            let loader = Arc::clone(&mcp_loader);
+
+            runtime_handle.spawn(async move {
+                if let Err(e) = pool.add_server("mcp", &mcp_url).await {
+                    warn!("[mcp]", "Failed to add server: {}", e);
+                    return;
+                }
+
+                info!("[mcp]", "Starting background connection to 'mcp'");
+
+                if let Err(e) = pool.connect("mcp").await {
+                    warn!("[mcp]", "Failed to connect to 'mcp': {}", e);
+                    return;
+                }
+                info!("[mcp]", "Connected to MCP server: mcp");
+
+                if let Err(e) = pool.initialize("mcp", "ragent", env!("CARGO_PKG_VERSION")).await {
+                    warn!("[mcp]", "Failed to initialize 'mcp': {}", e);
+                    return;
+                }
+
+                match loader.load_tools("mcp").await {
+                    Ok(count) => {
+                        info!("[mcp]", "Loaded {} tools from 'mcp'", count);
+                    }
+                    Err(e) => {
+                        warn!("[mcp]", "Failed to load tools from 'mcp': {}", e);
+                    }
+                }
+            });
+        }
+
         let context = AppContext::new(agent, config, Arc::clone(&tool_registry));
         let ui_state = UIState::new();
 
@@ -111,6 +156,8 @@ impl AppController {
             runtime,
             current_view,
             should_quit: false,
+            mcp_pool: Some(mcp_pool),
+            mcp_loader: Some(mcp_loader),
         })
     }
 
