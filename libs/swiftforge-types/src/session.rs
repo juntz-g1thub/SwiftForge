@@ -16,26 +16,52 @@ impl Default for SessionConfig {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
-    messages: VecDeque<Message>,
-    context_window: usize,
+    pub id: String,
+    pub name: String,
+    pub messages: VecDeque<Message>,
+    pub context_window: usize,
+    pub max_tokens: Option<usize>,
+    pub token_count: usize,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 impl Session {
-    pub fn new(context_window: usize) -> Self {
+    pub fn new(id: String, name: String, context_window: usize) -> Self {
+        let now = chrono::Utc::now().to_rfc3339();
         Self {
+            id,
+            name,
             messages: VecDeque::new(),
             context_window,
+            max_tokens: None,
+            token_count: 0,
+            created_at: now.clone(),
+            updated_at: now,
         }
     }
+
     pub fn add_message(&mut self, role: &str, content: &str) {
         self.messages.push_back(Message {
             role: role.to_string(),
             content: content.to_string(),
         });
+        self.updated_at = chrono::Utc::now().to_rfc3339();
     }
+
     pub fn messages(&self) -> Vec<Message> {
         self.messages.iter().cloned().collect()
+    }
+
+    pub fn needs_compaction(&self) -> bool {
+        let threshold = (self.context_window as f32 * 0.8) as usize;
+        self.token_count > threshold
+    }
+
+    pub fn estimate_token_count(&self) -> usize {
+        self.token_count
     }
 }
 
