@@ -6,8 +6,9 @@ use serde_json::Value as JsonValue;
 
 use swiftforge_log::{info, debug, warn, error, LogLevel};
 use swiftforge_task::{TaskScheduler, Task, MessageBus, AgentMessage};
-use swiftforge_provider_core::{DynLLMProvider, DynToolCallingProvider, LLMProvider, ToolCallingProvider};
-use swiftforge_types::{Message, ModelResponse, Usage, ToolRegistry, ToolCall, ToolResult, ToolDefinition, StreamingChunk};
+use swiftforge_provider_core::{DynLLMProvider, DynToolCallingProvider, ToolCallingProvider};
+use swiftforge_types::{Message, ModelResponse, Usage, ToolRegistry, ToolCall, ToolResult, ToolDefinition, StreamingChunk, Session};
+use tokio::sync::RwLock;
 use swiftforge_tools::ToolCallParser;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -215,20 +216,23 @@ impl Agent {
         Ok(response)
     }
 
-    pub async fn run_agent_loop(&self, initial_message: &str, max_iterations: usize, stream_ui: Option<std::sync::mpsc::Sender<Result<String>>>) -> Result<String> {
+        pub async fn run_agent_loop(
+        &self,
+        session: Arc<RwLock<Session>>,
+        initial_message: &str,
+        max_iterations: usize,
+        stream_ui: Option<std::sync::mpsc::Sender<Result<String>>>
+    ) -> Result<String> {
         info!("[agent]", "run_agent_loop started with: {}", initial_message);
-        let mut messages = vec![
-            Message {
-                role: "user".to_string(),
-                content: initial_message.to_string(),
-            }
-        ];
+        session.write().await.add_message("user", initial_message);
 
         let mut full_response = String::new();
         let mut tool_summary = Vec::new();
 
         for i in 0..max_iterations {
             info!("[agent]", "Agent loop iteration {}", i + 1);
+
+                        let messages = session.read().await.messages();
 
             let stream_ui_clone = stream_ui.clone();
             let on_chunk = move |chunk: StreamingChunk| {
@@ -271,17 +275,11 @@ impl Agent {
                 if full_response.is_empty() {
                     full_response.push_str("Tool execution completed.");
                 }
-                messages.push(Message {
-                    role: "assistant".to_string(),
-                    content: response.content,
-                });
+                session.write().await.add_message("assistant", &response.content);
                 break;
             }
 
-            messages.push(Message {
-                role: "assistant".to_string(),
-                content: response.content.clone(),
-            });
+            session.write().await.add_message("assistant", &response.content);
 
             let results = self.execute_tool_calls(tool_calls).await?;
 
@@ -298,16 +296,22 @@ impl Agent {
                     }
                 };
 
-                messages.push(Message {
-                    role: "user".to_string(),
-                    content: tool_result_text.clone(),
-                });
+                session.write().await.add_message("user", &tool_result_text);
 
                 if let Some(ref tx) = stream_ui {
                     let _ = tx.send(Ok(format!("[TOOL_RESULT] {}", tool_result_text)));
                 }
 
                 info!("[agent]", "Tool executed: {}", tool_result_text.chars().take(100).collect::<String>());
+            }
+
+            if session.read().await.needs_compaction() {
+                let mut session = session.write().await;
+                if let Err(e) = session.compact(|msgs| async move {
+                    self.llm_provider.chat(msgs).await.map_err(|e| anyhow::anyhow!("{:?}", e))
+                }).await {
+                    warn!("[session]", "Compact failed: {}", e);
+                }
             }
         }
 

@@ -7,12 +7,13 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 use tokio::runtime::Builder;
 use swiftforge_log::{debug, info, trace, warn};
 use tokio::sync::Mutex as TokioMutex;
+use tokio::sync::RwLock;
 
 use crate::core::{Agent, AgentConfig, AgentRole};
 use swiftforge_providers::{OpenAIProvider, AnthropicProvider, OllamaProvider, DeepSeekProvider, MiniMaxProvider, CustomProvider};
 use swiftforge_provider_core::ProviderRegistry;
 use swiftforge_tools::{BashTool, ReadTool, WriteTool, EditTool, GrepTool};
-use swiftforge_types::ToolRegistry;
+use swiftforge_types::{ToolRegistry, Session};
 use swiftforge_mcp::{McpConnectionPool, McpToolLoader};
 use crate::tui::config::ConfigManager;
 
@@ -303,7 +304,13 @@ impl AppController {
                 }
             }
 
+            let session = Arc::new(RwLock::new(Session::new(
+                uuid::Uuid::new_v4().to_string(),
+                "temp".to_string(),
+                100,
+            )));
             let result = final_agent.run_agent_loop(
+                session,
                 &msg,
                 5,
                 Some(tx),

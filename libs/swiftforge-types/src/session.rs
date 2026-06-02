@@ -1,13 +1,6 @@
 use crate::ModelResponse;
-use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
-
-#[async_trait]
-pub trait LLMProvider: Send + Sync {
-    async fn chat(&self, messages: Vec<Message>) -> anyhow::Result<ModelResponse>;
-    fn provider_name(&self) -> &str;
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionConfig {
@@ -72,7 +65,11 @@ impl Session {
         self.token_count
     }
 
-    pub async fn compact(&mut self, llm_provider: &dyn LLMProvider) -> Result<(), SessionError> {
+    pub async fn compact<F, Fut>(&mut self, chat_fn: F) -> Result<(), SessionError>
+    where
+        F: Fn(Vec<Message>) -> Fut,
+        Fut: std::future::Future<Output = Result<ModelResponse, anyhow::Error>>,
+    {
         if self.messages.len() < 10 {
             return Ok(());
         }
@@ -94,7 +91,7 @@ impl Session {
             history
         );
 
-        let summary_response = llm_provider.chat(vec![
+        let summary_response = chat_fn(vec![
             Message { role: "user".to_string(), content: prompt }
         ]).await
         .map_err(|e| SessionError::CompactFailed(e.to_string()))?;
