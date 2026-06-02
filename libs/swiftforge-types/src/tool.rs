@@ -25,7 +25,11 @@ pub struct ToolDefinition {
 
 impl ToolDefinition {
     pub fn new(name: &str, description: &str, input_schema: serde_json::Value) -> Self {
-        Self { name: name.to_string(), description: description.to_string(), input_schema }
+        Self {
+            name: name.to_string(),
+            description: description.to_string(),
+            input_schema,
+        }
     }
 }
 
@@ -43,7 +47,9 @@ pub struct ToolRegistry {
 
 impl ToolRegistry {
     pub fn new() -> Self {
-        Self { tools: HashMap::new() }
+        Self {
+            tools: HashMap::new(),
+        }
     }
     pub fn register<T: Tool + 'static>(&mut self, tool: T) {
         self.tools.insert(tool.name().to_string(), Arc::new(tool));
@@ -52,23 +58,32 @@ impl ToolRegistry {
         if let Some(tool) = self.tools.get(&call.name) {
             tool.execute(call).await
         } else {
-            ToolResult { success: false, output: None, error: Some(format!("Tool '{}' not found", call.name)) }
+            ToolResult {
+                success: false,
+                output: None,
+                error: Some(format!("Tool '{}' not found", call.name)),
+            }
         }
     }
     pub fn list_tools(&self) -> Vec<String> {
         self.tools.keys().cloned().collect()
     }
     pub fn get_definitions(&self) -> Vec<ToolDefinition> {
-        self.tools.values().map(|tool| ToolDefinition {
-            name: tool.name().to_string(),
-            description: tool.description().to_string(),
-            input_schema: tool.input_schema(),
-        }).collect()
+        self.tools
+            .values()
+            .map(|tool| ToolDefinition {
+                name: tool.name().to_string(),
+                description: tool.description().to_string(),
+                input_schema: tool.input_schema(),
+            })
+            .collect()
     }
 }
 
 impl Default for ToolRegistry {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Clone for ToolRegistry {

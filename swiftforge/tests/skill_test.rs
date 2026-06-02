@@ -20,7 +20,7 @@ scope: Project
 
 This is a test skill content.
 "#;
-    
+
     let skill = loader.parse_skill(content).unwrap();
     assert_eq!(skill.name, "test-skill");
     assert_eq!(skill.description, "A test skill");
@@ -35,7 +35,7 @@ fn test_skill_registry_creation() {
 #[tokio::test]
 async fn test_skill_registry_register() {
     use rust_agent_platform::platform::skill::Skill;
-    
+
     let registry = SkillRegistry::new();
     let skill = Skill {
         name: "test".to_string(),
@@ -43,9 +43,9 @@ async fn test_skill_registry_register() {
         commands: Vec::new(),
         scope: SkillScope::Project,
     };
-    
+
     registry.register(skill).await;
-    
+
     let skills = registry.list_skills().await;
     assert!(skills.contains(&"test".to_string()));
 }
@@ -53,7 +53,7 @@ async fn test_skill_registry_register() {
 #[tokio::test]
 async fn test_skill_registry_enable_disable() {
     use rust_agent_platform::platform::skill::Skill;
-    
+
     let registry = SkillRegistry::new();
     let skill = Skill {
         name: "test".to_string(),
@@ -61,7 +61,7 @@ async fn test_skill_registry_enable_disable() {
         commands: Vec::new(),
         scope: SkillScope::Project,
     };
-    
+
     registry.register(skill).await;
     assert!(registry.enable("test").await);
     assert!(registry.disable("test").await);

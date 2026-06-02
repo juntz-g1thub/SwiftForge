@@ -20,7 +20,12 @@ pub struct ModelResponse {
 
 impl ModelResponse {
     pub fn new(content: String, usage: Usage) -> Self {
-        Self { content, reasoning_content: None, tool_calls: None, usage }
+        Self {
+            content,
+            reasoning_content: None,
+            tool_calls: None,
+            usage,
+        }
     }
     pub fn with_tool_calls(mut self, tool_calls: Vec<serde_json::Value>) -> Self {
         self.tool_calls = Some(tool_calls);

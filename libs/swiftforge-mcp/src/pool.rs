@@ -1,8 +1,8 @@
+use crate::client::MCPClient;
+use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::sync::Arc;
-use anyhow::{Result, anyhow};
 use tokio::sync::RwLock;
-use crate::client::MCPClient;
 
 #[derive(Clone)]
 pub struct McpConnectionPool {
@@ -32,14 +32,16 @@ impl McpConnectionPool {
 
     pub async fn connect(&self, name: &str) -> Result<()> {
         let clients = self.clients.read().await;
-        let client = clients.get(name)
+        let client = clients
+            .get(name)
             .ok_or_else(|| anyhow!("MCP server '{}' not found", name))?;
         client.connect().await
     }
 
     pub async fn initialize(&self, name: &str, client_name: &str, version: &str) -> Result<()> {
         let clients = self.clients.read().await;
-        let client = clients.get(name)
+        let client = clients
+            .get(name)
             .ok_or_else(|| anyhow!("MCP server '{}' not found", name))?;
         client.initialize(client_name, version).await?;
         Ok(())

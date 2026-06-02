@@ -1,9 +1,9 @@
+use crate::adapter::McpToolAdapter;
+use crate::pool::McpConnectionPool;
+use anyhow::{anyhow, Result};
 use std::sync::Arc;
-use anyhow::{Result, anyhow};
 use std::sync::Mutex;
 use swiftforge_types::ToolRegistry;
-use crate::pool::McpConnectionPool;
-use crate::adapter::McpToolAdapter;
 
 pub struct McpToolLoader {
     pool: Arc<McpConnectionPool>,
@@ -12,11 +12,17 @@ pub struct McpToolLoader {
 
 impl McpToolLoader {
     pub fn new(pool: Arc<McpConnectionPool>, registry: Arc<ToolRegistry>) -> Self {
-        Self { pool, registry: Arc::new(Mutex::new(registry.as_ref().clone())) }
+        Self {
+            pool,
+            registry: Arc::new(Mutex::new(registry.as_ref().clone())),
+        }
     }
 
     pub async fn load_tools(&self, server_name: &str) -> Result<usize> {
-        let client = self.pool.client(server_name).await
+        let client = self
+            .pool
+            .client(server_name)
+            .await
             .ok_or_else(|| anyhow!("Server '{}' not found", server_name))?;
 
         let tools = client.list_tools().await?;

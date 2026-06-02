@@ -1,14 +1,18 @@
-use rust_agent_platform::core::{ToolRegistry, Tool, ToolCall, ToolResult};
-use rust_agent_platform::tools::{BashTool, ReadTool, WriteTool, EditTool, GrepTool};
 use async_trait::async_trait;
+use rust_agent_platform::core::{Tool, ToolCall, ToolRegistry, ToolResult};
+use rust_agent_platform::tools::{BashTool, EditTool, GrepTool, ReadTool, WriteTool};
 use std::collections::HashMap;
 
 struct DummyTool;
 
 #[async_trait]
 impl Tool for DummyTool {
-    fn name(&self) -> &str { "dummy" }
-    fn description(&self) -> &str { "A dummy tool" }
+    fn name(&self) -> &str {
+        "dummy"
+    }
+    fn description(&self) -> &str {
+        "A dummy tool"
+    }
     fn input_schema(&self) -> serde_json::Value {
         serde_json::json!({
             "type": "object",
@@ -17,7 +21,11 @@ impl Tool for DummyTool {
         })
     }
     async fn execute(&self, _call: ToolCall) -> ToolResult {
-        ToolResult { success: true, output: Some("done".to_string()), error: None }
+        ToolResult {
+            success: true,
+            output: Some("done".to_string()),
+            error: None,
+        }
     }
 }
 

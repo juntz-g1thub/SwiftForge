@@ -1,12 +1,18 @@
-use rust_agent_platform::core::{Agent, AgentConfig, AgentRole, ToolRegistry, Tool, ToolCall, ToolResult};
 use async_trait::async_trait;
+use rust_agent_platform::core::{
+    Agent, AgentConfig, AgentRole, Tool, ToolCall, ToolRegistry, ToolResult,
+};
 
 struct DummyTool;
 
 #[async_trait]
 impl Tool for DummyTool {
-    fn name(&self) -> &str { "dummy" }
-    fn description(&self) -> &str { "A dummy tool for testing" }
+    fn name(&self) -> &str {
+        "dummy"
+    }
+    fn description(&self) -> &str {
+        "A dummy tool for testing"
+    }
     fn input_schema(&self) -> serde_json::Value {
         serde_json::json!({
             "type": "object",
@@ -15,7 +21,11 @@ impl Tool for DummyTool {
         })
     }
     async fn execute(&self, _call: ToolCall) -> ToolResult {
-        ToolResult { success: true, output: Some("done".to_string()), error: None }
+        ToolResult {
+            success: true,
+            output: Some("done".to_string()),
+            error: None,
+        }
     }
 }
 

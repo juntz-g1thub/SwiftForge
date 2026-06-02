@@ -1,15 +1,15 @@
 pub mod utils;
 
-mod openai;
 mod anthropic;
-mod ollama;
+mod custom;
 mod deepseek;
 mod minimax;
-mod custom;
+mod ollama;
+mod openai;
 
-pub use openai::OpenAIProvider;
 pub use anthropic::AnthropicProvider;
-pub use ollama::OllamaProvider;
+pub use custom::CustomProvider;
 pub use deepseek::DeepSeekProvider;
 pub use minimax::MiniMaxProvider;
-pub use custom::CustomProvider;
+pub use ollama::OllamaProvider;
+pub use openai::OpenAIProvider;

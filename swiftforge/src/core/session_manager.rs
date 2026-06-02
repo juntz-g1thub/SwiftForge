@@ -1,10 +1,10 @@
+use crate::core::session_db::SessionDatabase;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use swiftforge_types::{Session, SessionError};
 use tokio::sync::RwLock;
 use uuid::Uuid;
-use swiftforge_types::{Session, SessionError};
-use crate::core::session_db::SessionDatabase;
 
 #[derive(Clone)]
 pub struct SessionManager {
@@ -28,12 +28,19 @@ impl SessionManager {
         })
     }
 
-    pub async fn create_session(&self, name: &str, context_window: usize) -> Result<Session, SessionError> {
+    pub async fn create_session(
+        &self,
+        name: &str,
+        context_window: usize,
+    ) -> Result<Session, SessionError> {
         let id = Uuid::new_v4().to_string();
         let session = Session::new(id.clone(), name.to_string(), context_window);
 
         self.db.save(&session)?;
-        self.sessions.write().await.insert(id.clone(), session.clone());
+        self.sessions
+            .write()
+            .await
+            .insert(id.clone(), session.clone());
         *self.current_session_id.write().await = Some(id);
 
         Ok(session)
@@ -65,7 +72,10 @@ impl SessionManager {
 
     pub async fn update_session(&self, session: &Session) -> Result<(), SessionError> {
         self.db.save(session)?;
-        self.sessions.write().await.insert(session.id.clone(), session.clone());
+        self.sessions
+            .write()
+            .await
+            .insert(session.id.clone(), session.clone());
         Ok(())
     }
 
@@ -81,7 +91,10 @@ impl SessionManager {
 
     pub async fn list_sessions(&self) -> Vec<(String, String)> {
         if let Ok(sessions) = self.db.load_all() {
-            sessions.into_iter().map(|s| (s.id.clone(), s.name.clone())).collect()
+            sessions
+                .into_iter()
+                .map(|s| (s.id.clone(), s.name.clone()))
+                .collect()
         } else {
             Vec::new()
         }

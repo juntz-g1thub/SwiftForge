@@ -1,9 +1,8 @@
-use rust_agent_platform::orchestration::{
-    TaskScheduler, Task, TaskPriority, TaskStatus,
-    MessageBus, AgentMessage,
-    OrchestratedAgent, AgentStatus,
-};
 use rust_agent_platform::core::AgentConfig;
+use rust_agent_platform::orchestration::{
+    AgentMessage, AgentStatus, MessageBus, OrchestratedAgent, Task, TaskPriority, TaskScheduler,
+    TaskStatus,
+};
 
 #[tokio::test]
 async fn test_task_scheduler_creation() {

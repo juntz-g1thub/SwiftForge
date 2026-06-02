@@ -1,8 +1,7 @@
+use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use anyhow::Result;
-
 
 #[derive(Debug, Clone)]
 pub struct AgentMessage {
@@ -22,11 +21,16 @@ pub struct MessageBus {
 
 impl MessageBus {
     pub fn new() -> Self {
-        Self { handlers: Arc::new(RwLock::new(HashMap::new())) }
+        Self {
+            handlers: Arc::new(RwLock::new(HashMap::new())),
+        }
     }
     pub async fn subscribe(&self, agent_id: &str, handler: Arc<dyn MessageHandler>) {
         let mut handlers = self.handlers.write().await;
-        handlers.entry(agent_id.to_string()).or_insert_with(Vec::new).push(handler);
+        handlers
+            .entry(agent_id.to_string())
+            .or_insert_with(Vec::new)
+            .push(handler);
     }
     pub async fn unsubscribe(&self, agent_id: &str) {
         let mut handlers = self.handlers.write().await;

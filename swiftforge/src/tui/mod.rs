@@ -1,11 +1,14 @@
-mod views;
-mod state;
 mod components;
-mod task;
 mod config;
+mod state;
+mod task;
+mod views;
 
 pub use config::{AppConfig, ConfigManager};
-pub use views::{View, ChatView, ConfigView};
-pub use state::{Action, ViewState, ViewStateKind, AppContext, UIState, ChatViewState, ConfigViewState, ChatContext, ConfigContext};
+pub use state::{
+    Action, AppContext, ChatContext, ChatViewState, ConfigContext, ConfigViewState, UIState,
+    ViewState, ViewStateKind,
+};
+pub use views::{ChatView, ConfigView, View};
 
 pub mod app_controller;

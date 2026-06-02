@@ -1,6 +1,9 @@
 pub mod core;
-pub mod tui;
 pub mod platform;
+pub mod tui;
 
 pub use core::{Agent, AgentConfig, AgentRole};
-pub use swiftforge_types::{Message, Tool, ToolResult, Session, Provider, ToolDefinition, ToolRegistry, ToolCall, ProviderConfig, ModelResponse, Usage, SessionConfig};
+pub use swiftforge_types::{
+    Message, ModelResponse, Provider, ProviderConfig, Session, SessionConfig, Tool, ToolCall,
+    ToolDefinition, ToolRegistry, ToolResult, Usage,
+};

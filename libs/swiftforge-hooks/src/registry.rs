@@ -1,8 +1,8 @@
+use super::types::{HookContext, HookEvent};
+use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use anyhow::Result;
-use super::types::{HookContext, HookEvent};
 
 pub type HookFn = Arc<dyn Fn(HookContext) -> Result<()> + Send + Sync>;
 
@@ -12,11 +12,16 @@ pub struct HookRegistry {
 
 impl HookRegistry {
     pub fn new() -> Self {
-        Self { hooks: RwLock::new(HashMap::new()) }
+        Self {
+            hooks: RwLock::new(HashMap::new()),
+        }
     }
     pub async fn register(&self, event_name: &str, priority: i32, hook: HookFn) {
         let mut hooks = self.hooks.write().await;
-        hooks.entry(event_name.to_string()).or_insert_with(Vec::new).push((hook, priority));
+        hooks
+            .entry(event_name.to_string())
+            .or_insert_with(Vec::new)
+            .push((hook, priority));
     }
     pub async fn dispatch(&self, event: HookEvent) -> Result<()> {
         let event_name = format!("{:?}", event);

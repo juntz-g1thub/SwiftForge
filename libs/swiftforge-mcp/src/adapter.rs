@@ -1,8 +1,8 @@
-use std::sync::Arc;
+use crate::client::MCPClient;
 use async_trait::async_trait;
 use serde_json::Value as JsonValue;
+use std::sync::Arc;
 use swiftforge_types::{Tool, ToolCall, ToolResult};
-use crate::client::MCPClient;
 
 pub struct McpToolAdapter {
     full_name: String,
@@ -46,8 +46,7 @@ impl Tool for McpToolAdapter {
     }
 
     async fn execute(&self, call: ToolCall) -> ToolResult {
-        let arguments = serde_json::to_value(&call.arguments)
-            .unwrap_or(JsonValue::Null);
+        let arguments = serde_json::to_value(&call.arguments).unwrap_or(JsonValue::Null);
 
         match self.mcp_client.call_tool(&self.mcp_name, arguments).await {
             Ok(content_blocks) => {

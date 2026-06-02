@@ -1,9 +1,9 @@
 pub mod bash;
 pub mod edit;
 pub mod grep;
+pub mod parser;
 pub mod read;
 pub mod write;
-pub mod parser;
 
 pub use bash::BashTool;
 pub use edit::EditTool;

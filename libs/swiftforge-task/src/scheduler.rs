@@ -34,11 +34,16 @@ pub struct TaskScheduler {
 
 impl TaskScheduler {
     pub fn new() -> Self {
-        Self { tasks: Arc::new(RwLock::new(VecDeque::new())) }
+        Self {
+            tasks: Arc::new(RwLock::new(VecDeque::new())),
+        }
     }
     pub async fn add_task(&self, task: Task) {
         let mut tasks = self.tasks.write().await;
-        let pos = tasks.iter().position(|t| t.priority < task.priority).unwrap_or(tasks.len());
+        let pos = tasks
+            .iter()
+            .position(|t| t.priority < task.priority)
+            .unwrap_or(tasks.len());
         tasks.insert(pos, task);
     }
     pub async fn get_next_task(&self) -> Option<Task> {
@@ -67,6 +72,10 @@ impl TaskScheduler {
     }
     pub async fn list_pending(&self) -> Vec<Task> {
         let tasks = self.tasks.read().await;
-        tasks.iter().filter(|t| t.status == TaskStatus::Pending).cloned().collect()
+        tasks
+            .iter()
+            .filter(|t| t.status == TaskStatus::Pending)
+            .cloned()
+            .collect()
     }
 }

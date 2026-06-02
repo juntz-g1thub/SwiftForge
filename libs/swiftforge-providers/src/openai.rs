@@ -1,7 +1,7 @@
 use async_trait::async_trait;
-use swiftforge_provider_core::{LLMProvider, ToolCallingProvider, ProviderError};
-use swiftforge_types::{ModelResponse, Usage, Message, ToolDefinition, StreamingChunk};
 use swiftforge_provider_core::error::Result;
+use swiftforge_provider_core::{LLMProvider, ProviderError, ToolCallingProvider};
+use swiftforge_types::{Message, ModelResponse, StreamingChunk, ToolDefinition, Usage};
 use tokio_stream::StreamExt;
 
 pub struct OpenAIProvider {
@@ -42,10 +42,17 @@ impl OpenAIProvider {
         let status = response.status();
         if !status.is_success() {
             let body = response.text().await.unwrap_or_default();
-            return Err(ProviderError::ApiError { status: status.as_u16(), message: body }.into());
+            return Err(ProviderError::ApiError {
+                status: status.as_u16(),
+                message: body,
+            }
+            .into());
         }
 
-        let data: serde_json::Value = response.json().await.map_err(|e| ProviderError::ParseError(e.to_string()))?;
+        let data: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| ProviderError::ParseError(e.to_string()))?;
         let models = data["data"]
             .as_array()
             .map(|arr| {
@@ -57,18 +64,25 @@ impl OpenAIProvider {
         Ok(models)
     }
 
-    pub async fn chat_with_tools(&self, messages: Vec<Message>, tools: Vec<ToolDefinition>) -> Result<ModelResponse> {
+    pub async fn chat_with_tools(
+        &self,
+        messages: Vec<Message>,
+        tools: Vec<ToolDefinition>,
+    ) -> Result<ModelResponse> {
         let client = reqwest::Client::new();
-        let tools_json: Vec<serde_json::Value> = tools.into_iter().map(|t| {
-            serde_json::json!({
-                "type": "function",
-                "function": {
-                    "name": t.name,
-                    "description": t.description,
-                    "parameters": t.input_schema
-                }
+        let tools_json: Vec<serde_json::Value> = tools
+            .into_iter()
+            .map(|t| {
+                serde_json::json!({
+                    "type": "function",
+                    "function": {
+                        "name": t.name,
+                        "description": t.description,
+                        "parameters": t.input_schema
+                    }
+                })
             })
-        }).collect();
+            .collect();
 
         let request_body = serde_json::json!({
             "model": self.model,
@@ -87,7 +101,10 @@ impl OpenAIProvider {
             .await
             .map_err(|e| ProviderError::NetworkError(e.to_string()))?;
 
-        let data: serde_json::Value = response.json().await.map_err(|e| ProviderError::ParseError(e.to_string()))?;
+        let data: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| ProviderError::ParseError(e.to_string()))?;
         let content = data["choices"][0]["message"]["content"]
             .as_str()
             .unwrap_or("")
@@ -110,7 +127,11 @@ impl OpenAIProvider {
         Ok(response)
     }
 
-    pub async fn stream_chat(&self, messages: Vec<Message>, mut on_chunk: Box<dyn FnMut(StreamingChunk) + Send + Sync + 'static>) -> Result<()> {
+    pub async fn stream_chat(
+        &self,
+        messages: Vec<Message>,
+        mut on_chunk: Box<dyn FnMut(StreamingChunk) + Send + Sync + 'static>,
+    ) -> Result<()> {
         let client = reqwest::Client::new();
         let response = client
             .post(format!("{}/chat/completions", self.base_url))
@@ -151,18 +172,26 @@ impl OpenAIProvider {
         Ok(())
     }
 
-    pub async fn stream_chat_with_tools(&self, messages: Vec<Message>, tools: Vec<ToolDefinition>, mut on_chunk: Box<dyn FnMut(StreamingChunk) + Send + Sync + 'static>) -> Result<()> {
+    pub async fn stream_chat_with_tools(
+        &self,
+        messages: Vec<Message>,
+        tools: Vec<ToolDefinition>,
+        mut on_chunk: Box<dyn FnMut(StreamingChunk) + Send + Sync + 'static>,
+    ) -> Result<()> {
         let client = reqwest::Client::new();
-        let tools_json: Vec<serde_json::Value> = tools.into_iter().map(|t| {
-            serde_json::json!({
-                "type": "function",
-                "function": {
-                    "name": t.name,
-                    "description": t.description,
-                    "parameters": t.input_schema
-                }
+        let tools_json: Vec<serde_json::Value> = tools
+            .into_iter()
+            .map(|t| {
+                serde_json::json!({
+                    "type": "function",
+                    "function": {
+                        "name": t.name,
+                        "description": t.description,
+                        "parameters": t.input_schema
+                    }
+                })
             })
-        }).collect();
+            .collect();
 
         let request_body = serde_json::json!({
             "model": self.model,
@@ -229,10 +258,13 @@ impl LLMProvider for OpenAIProvider {
             .ok_or_else(|| ProviderError::InvalidResponse("No content in response".to_string()))?
             .to_string();
 
-        Ok(ModelResponse::new(content, Usage {
-            input_tokens: data["usage"]["prompt_tokens"].as_u64().unwrap_or(0) as u32,
-            output_tokens: data["usage"]["completion_tokens"].as_u64().unwrap_or(0) as u32,
-        }))
+        Ok(ModelResponse::new(
+            content,
+            Usage {
+                input_tokens: data["usage"]["prompt_tokens"].as_u64().unwrap_or(0) as u32,
+                output_tokens: data["usage"]["completion_tokens"].as_u64().unwrap_or(0) as u32,
+            },
+        ))
     }
 
     fn provider_name(&self) -> &str {
@@ -243,14 +275,22 @@ impl LLMProvider for OpenAIProvider {
         Self::list_models(self).await
     }
 
-    async fn stream_chat(&self, messages: Vec<Message>, on_chunk: Box<dyn FnMut(StreamingChunk) + Send + Sync + 'static>) -> Result<()> {
+    async fn stream_chat(
+        &self,
+        messages: Vec<Message>,
+        on_chunk: Box<dyn FnMut(StreamingChunk) + Send + Sync + 'static>,
+    ) -> Result<()> {
         Self::stream_chat(self, messages, on_chunk).await
     }
 }
 
 #[async_trait]
 impl ToolCallingProvider for OpenAIProvider {
-    async fn chat_with_tools(&self, messages: Vec<Message>, tools: Vec<ToolDefinition>) -> Result<ModelResponse> {
+    async fn chat_with_tools(
+        &self,
+        messages: Vec<Message>,
+        tools: Vec<ToolDefinition>,
+    ) -> Result<ModelResponse> {
         Self::chat_with_tools(self, messages, tools).await
     }
 
@@ -258,7 +298,12 @@ impl ToolCallingProvider for OpenAIProvider {
         "openai"
     }
 
-    async fn stream_chat_with_tools(&self, messages: Vec<Message>, tools: Vec<ToolDefinition>, on_chunk: Box<dyn FnMut(StreamingChunk) + Send + Sync + 'static>) -> Result<()> {
+    async fn stream_chat_with_tools(
+        &self,
+        messages: Vec<Message>,
+        tools: Vec<ToolDefinition>,
+        on_chunk: Box<dyn FnMut(StreamingChunk) + Send + Sync + 'static>,
+    ) -> Result<()> {
         Self::stream_chat_with_tools(self, messages, tools, on_chunk).await
     }
 }

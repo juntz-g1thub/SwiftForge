@@ -1,8 +1,8 @@
-use async_trait::async_trait;
-use swiftforge_provider_core::{LLMProvider, ToolCallingProvider};
-use swiftforge_types::{ModelResponse, Usage, Message, ToolDefinition, StreamingChunk};
-use swiftforge_provider_core::error::Result;
 use anyhow::Context;
+use async_trait::async_trait;
+use swiftforge_provider_core::error::Result;
+use swiftforge_provider_core::{LLMProvider, ToolCallingProvider};
+use swiftforge_types::{Message, ModelResponse, StreamingChunk, ToolDefinition, Usage};
 use tokio_stream::StreamExt;
 
 pub struct OllamaProvider {
@@ -43,18 +43,25 @@ impl OllamaProvider {
         Ok(models)
     }
 
-    pub async fn chat_with_tools(&self, messages: Vec<Message>, tools: Vec<ToolDefinition>) -> Result<ModelResponse> {
+    pub async fn chat_with_tools(
+        &self,
+        messages: Vec<Message>,
+        tools: Vec<ToolDefinition>,
+    ) -> Result<ModelResponse> {
         let client = reqwest::Client::new();
-        let tools_json: Vec<serde_json::Value> = tools.into_iter().map(|t| {
-            serde_json::json!({
-                "type": "function",
-                "function": {
-                    "name": t.name,
-                    "description": t.description,
-                    "parameters": t.input_schema
-                }
+        let tools_json: Vec<serde_json::Value> = tools
+            .into_iter()
+            .map(|t| {
+                serde_json::json!({
+                    "type": "function",
+                    "function": {
+                        "name": t.name,
+                        "description": t.description,
+                        "parameters": t.input_schema
+                    }
+                })
             })
-        }).collect();
+            .collect();
 
         let request_body = serde_json::json!({
             "model": self.model,
@@ -94,7 +101,11 @@ impl OllamaProvider {
         Ok(response)
     }
 
-    pub async fn stream_chat(&self, messages: Vec<Message>, mut on_chunk: Box<dyn FnMut(StreamingChunk) + Send + Sync + 'static>) -> Result<()> {
+    pub async fn stream_chat(
+        &self,
+        messages: Vec<Message>,
+        mut on_chunk: Box<dyn FnMut(StreamingChunk) + Send + Sync + 'static>,
+    ) -> Result<()> {
         let client = reqwest::Client::new();
         let response = client
             .post(format!("{}/api/chat", self.base_url))
@@ -134,18 +145,26 @@ impl OllamaProvider {
         Ok(())
     }
 
-    pub async fn stream_chat_with_tools(&self, messages: Vec<Message>, tools: Vec<ToolDefinition>, mut on_chunk: Box<dyn FnMut(StreamingChunk) + Send + Sync + 'static>) -> Result<()> {
+    pub async fn stream_chat_with_tools(
+        &self,
+        messages: Vec<Message>,
+        tools: Vec<ToolDefinition>,
+        mut on_chunk: Box<dyn FnMut(StreamingChunk) + Send + Sync + 'static>,
+    ) -> Result<()> {
         let client = reqwest::Client::new();
-        let tools_json: Vec<serde_json::Value> = tools.into_iter().map(|t| {
-            serde_json::json!({
-                "type": "function",
-                "function": {
-                    "name": t.name,
-                    "description": t.description,
-                    "parameters": t.input_schema
-                }
+        let tools_json: Vec<serde_json::Value> = tools
+            .into_iter()
+            .map(|t| {
+                serde_json::json!({
+                    "type": "function",
+                    "function": {
+                        "name": t.name,
+                        "description": t.description,
+                        "parameters": t.input_schema
+                    }
+                })
             })
-        }).collect();
+            .collect();
 
         let request_body = serde_json::json!({
             "model": self.model,
@@ -210,10 +229,13 @@ impl LLMProvider for OllamaProvider {
             .context("No content in response")?
             .to_string();
 
-        Ok(ModelResponse::new(content, Usage {
-            input_tokens: 0,
-            output_tokens: 0,
-        }))
+        Ok(ModelResponse::new(
+            content,
+            Usage {
+                input_tokens: 0,
+                output_tokens: 0,
+            },
+        ))
     }
 
     fn provider_name(&self) -> &str {
@@ -224,14 +246,22 @@ impl LLMProvider for OllamaProvider {
         Self::list_models(self).await
     }
 
-    async fn stream_chat(&self, messages: Vec<Message>, on_chunk: Box<dyn FnMut(StreamingChunk) + Send + Sync + 'static>) -> Result<()> {
+    async fn stream_chat(
+        &self,
+        messages: Vec<Message>,
+        on_chunk: Box<dyn FnMut(StreamingChunk) + Send + Sync + 'static>,
+    ) -> Result<()> {
         Self::stream_chat(self, messages, on_chunk).await
     }
 }
 
 #[async_trait]
 impl ToolCallingProvider for OllamaProvider {
-    async fn chat_with_tools(&self, messages: Vec<Message>, tools: Vec<ToolDefinition>) -> Result<ModelResponse> {
+    async fn chat_with_tools(
+        &self,
+        messages: Vec<Message>,
+        tools: Vec<ToolDefinition>,
+    ) -> Result<ModelResponse> {
         Self::chat_with_tools(self, messages, tools).await
     }
 
@@ -239,7 +269,12 @@ impl ToolCallingProvider for OllamaProvider {
         "ollama"
     }
 
-    async fn stream_chat_with_tools(&self, messages: Vec<Message>, tools: Vec<ToolDefinition>, on_chunk: Box<dyn FnMut(StreamingChunk) + Send + Sync + 'static>) -> Result<()> {
+    async fn stream_chat_with_tools(
+        &self,
+        messages: Vec<Message>,
+        tools: Vec<ToolDefinition>,
+        on_chunk: Box<dyn FnMut(StreamingChunk) + Send + Sync + 'static>,
+    ) -> Result<()> {
         Self::stream_chat_with_tools(self, messages, tools, on_chunk).await
     }
 }

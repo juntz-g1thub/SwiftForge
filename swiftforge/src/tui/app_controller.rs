@@ -1,23 +1,29 @@
-use std::sync::{Arc, mpsc};
-use std::time::Duration;
 use anyhow::Result;
-use crossterm::{event::{self, Event}, execute};
 use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
+use crossterm::{
+    event::{self, Event},
+    execute,
+};
 use ratatui::{backend::CrosstermBackend, Terminal};
-use tokio::runtime::Builder;
+use std::sync::{mpsc, Arc};
+use std::time::Duration;
 use swiftforge_log::{debug, info, trace, warn};
+use tokio::runtime::Builder;
 use tokio::sync::Mutex as TokioMutex;
 use tokio::sync::RwLock;
 
 use crate::core::{Agent, AgentConfig, AgentRole};
-use swiftforge_providers::{OpenAIProvider, AnthropicProvider, OllamaProvider, DeepSeekProvider, MiniMaxProvider, CustomProvider};
-use swiftforge_provider_core::ProviderRegistry;
-use swiftforge_tools::{BashTool, ReadTool, WriteTool, EditTool, GrepTool};
-use swiftforge_types::{ToolRegistry, Session};
-use swiftforge_mcp::{McpConnectionPool, McpToolLoader};
 use crate::tui::config::ConfigManager;
+use swiftforge_mcp::{McpConnectionPool, McpToolLoader};
+use swiftforge_provider_core::ProviderRegistry;
+use swiftforge_providers::{
+    AnthropicProvider, CustomProvider, DeepSeekProvider, MiniMaxProvider, OllamaProvider,
+    OpenAIProvider,
+};
+use swiftforge_tools::{BashTool, EditTool, GrepTool, ReadTool, WriteTool};
+use swiftforge_types::{Session, ToolRegistry};
 
-use crate::tui::{AppContext, UIState, Action, ViewState, View, ChatView, ConfigView};
+use crate::tui::{Action, AppContext, ChatView, ConfigView, UIState, View, ViewState};
 
 pub struct AppController {
     context: AppContext,
@@ -36,7 +42,7 @@ impl AppController {
             .build()
             .expect("Failed to create tokio runtime");
 
-                let mut tool_registry = ToolRegistry::new();
+        let mut tool_registry = ToolRegistry::new();
         tool_registry.register(BashTool::new());
         tool_registry.register(ReadTool::new());
         tool_registry.register(WriteTool::new());
@@ -81,7 +87,12 @@ impl AppController {
                 tool_provider = Some(Arc::new(p));
             }
             "custom" => {
-                let p = CustomProvider::new("custom".to_string(), api_key, base_url.unwrap_or_default(), model_name.clone());
+                let p = CustomProvider::new(
+                    "custom".to_string(),
+                    api_key,
+                    base_url.unwrap_or_default(),
+                    model_name.clone(),
+                );
                 llm_provider = Arc::new(p.clone());
                 tool_provider = Some(Arc::new(p));
             }
@@ -128,7 +139,10 @@ impl AppController {
                 }
                 info!("[mcp]", "Connected to MCP server: mcp");
 
-                if let Err(e) = pool.initialize("mcp", "ragent", env!("CARGO_PKG_VERSION")).await {
+                if let Err(e) = pool
+                    .initialize("mcp", "ragent", env!("CARGO_PKG_VERSION"))
+                    .await
+                {
                     warn!("[mcp]", "Failed to initialize 'mcp': {}", e);
                     return;
                 }
@@ -148,7 +162,12 @@ impl AppController {
         let ui_state = UIState::new();
 
         let provider = context.config.lock().unwrap().get_provider().to_string();
-        let model = context.config.lock().unwrap().get_model(&provider).to_string();
+        let model = context
+            .config
+            .lock()
+            .unwrap()
+            .get_model(&provider)
+            .to_string();
         let current_view: Box<dyn View> = Box::new(ChatView::new(&provider, &model));
 
         Ok(Self {
@@ -174,7 +193,8 @@ impl AppController {
         loop {
             trace!("[app_controller]", "loop: drawing");
             terminal.draw(|f| {
-                self.current_view.render(f, f.size(), &self.context, &self.ui_state);
+                self.current_view
+                    .render(f, f.size(), &self.context, &self.ui_state);
             })?;
 
             if event::poll(Duration::from_millis(50))? {
@@ -227,8 +247,20 @@ impl AppController {
             }
             Action::GoBack => {
                 self.current_view.on_exit();
-                let provider = self.context.config.lock().unwrap().get_provider().to_string();
-                let model = self.context.config.lock().unwrap().get_model(&provider).to_string();
+                let provider = self
+                    .context
+                    .config
+                    .lock()
+                    .unwrap()
+                    .get_provider()
+                    .to_string();
+                let model = self
+                    .context
+                    .config
+                    .lock()
+                    .unwrap()
+                    .get_model(&provider)
+                    .to_string();
                 self.current_view = Box::new(ChatView::new(&provider, &model));
                 self.current_view.on_enter();
             }
@@ -245,16 +277,46 @@ impl AppController {
                 self.context.config.lock().unwrap().set_provider(&name);
             }
             Action::SaveApiKey(key) => {
-                let provider = self.context.config.lock().unwrap().get_provider().to_string();
-                self.context.config.lock().unwrap().set_api_key(&provider, Some(key));
+                let provider = self
+                    .context
+                    .config
+                    .lock()
+                    .unwrap()
+                    .get_provider()
+                    .to_string();
+                self.context
+                    .config
+                    .lock()
+                    .unwrap()
+                    .set_api_key(&provider, Some(key));
             }
             Action::SaveModel(model) => {
-                let provider = self.context.config.lock().unwrap().get_provider().to_string();
-                self.context.config.lock().unwrap().set_model(&provider, model);
+                let provider = self
+                    .context
+                    .config
+                    .lock()
+                    .unwrap()
+                    .get_provider()
+                    .to_string();
+                self.context
+                    .config
+                    .lock()
+                    .unwrap()
+                    .set_model(&provider, model);
             }
             Action::SaveBaseUrl(url) => {
-                let provider = self.context.config.lock().unwrap().get_provider().to_string();
-                self.context.config.lock().unwrap().set_base_url(&provider, Some(url));
+                let provider = self
+                    .context
+                    .config
+                    .lock()
+                    .unwrap()
+                    .get_provider()
+                    .to_string();
+                self.context
+                    .config
+                    .lock()
+                    .unwrap()
+                    .set_base_url(&provider, Some(url));
             }
             Action::FetchModels => {
                 self.spawn_fetch_models();
@@ -278,23 +340,52 @@ impl AppController {
     }
 
     fn spawn_agent_task(&mut self, msg: String) {
-        trace!("[app_controller]", "SPAWN: spawn_agent_task called, msg_len={}", msg.len());
+        trace!(
+            "[app_controller]",
+            "SPAWN: spawn_agent_task called, msg_len={}",
+            msg.len()
+        );
         let runtime = self.runtime.handle().clone();
 
         let (tx, rx) = mpsc::channel();
         *self.ui_state.response_receiver.lock().unwrap() = Some(rx);
 
-        let provider_name = self.context.config.lock().unwrap().get_provider().to_string();
-        let _api_key = self.context.config.lock().unwrap().get_api_key(&provider_name);
-        let _base_url = self.context.config.lock().unwrap().get_base_url(&provider_name);
-        let _model = self.context.config.lock().unwrap().get_model(&provider_name).to_string();
+        let provider_name = self
+            .context
+            .config
+            .lock()
+            .unwrap()
+            .get_provider()
+            .to_string();
+        let _api_key = self
+            .context
+            .config
+            .lock()
+            .unwrap()
+            .get_api_key(&provider_name);
+        let _base_url = self
+            .context
+            .config
+            .lock()
+            .unwrap()
+            .get_base_url(&provider_name);
+        let _model = self
+            .context
+            .config
+            .lock()
+            .unwrap()
+            .get_model(&provider_name)
+            .to_string();
         let agent = self.context.agent.clone();
 
         let streaming_text = Arc::clone(&self.ui_state.streaming_text);
         let finalized_message = Arc::clone(&self.ui_state.finalized_message);
 
         runtime.spawn(async move {
-            debug!("[app_controller]", "SPAWN: task started, provider={}", provider_name);
+            debug!(
+                "[app_controller]",
+                "SPAWN: task started, provider={}", provider_name
+            );
 
             let final_agent = agent;
 
@@ -309,12 +400,7 @@ impl AppController {
                 "temp".to_string(),
                 100,
             )));
-            let result = final_agent.run_agent_loop(
-                session,
-                &msg,
-                5,
-                Some(tx),
-            ).await;
+            let result = final_agent.run_agent_loop(session, &msg, 5, Some(tx)).await;
 
             match result {
                 Ok(response) => {
@@ -325,11 +411,13 @@ impl AppController {
                     }
                 }
                 Err(e) => {
-                    let partial = streaming_text.lock()
+                    let partial = streaming_text
+                        .lock()
                         .map(|mut s| s.take().unwrap_or_default())
                         .unwrap_or_default();
                     if let Ok(mut finalized) = finalized_message.lock() {
-                        *finalized = Some(("error".to_string(), format!("{} (partial: {})", e, partial)));
+                        *finalized =
+                            Some(("error".to_string(), format!("{} (partial: {})", e, partial)));
                     }
                 }
             }
@@ -339,10 +427,32 @@ impl AppController {
     fn spawn_fetch_models(&mut self) {
         let runtime = self.runtime.handle().clone();
 
-        let provider_name = self.context.config.lock().unwrap().get_provider().to_string();
-        let api_key = self.context.config.lock().unwrap().get_api_key(&provider_name);
-        let base_url = self.context.config.lock().unwrap().get_base_url(&provider_name);
-        let model = self.context.config.lock().unwrap().get_model(&provider_name).to_string();
+        let provider_name = self
+            .context
+            .config
+            .lock()
+            .unwrap()
+            .get_provider()
+            .to_string();
+        let api_key = self
+            .context
+            .config
+            .lock()
+            .unwrap()
+            .get_api_key(&provider_name);
+        let base_url = self
+            .context
+            .config
+            .lock()
+            .unwrap()
+            .get_base_url(&provider_name);
+        let model = self
+            .context
+            .config
+            .lock()
+            .unwrap()
+            .get_model(&provider_name)
+            .to_string();
         let config = Arc::clone(&self.context.config);
 
         runtime.spawn(async move {
@@ -362,11 +472,19 @@ impl AppController {
                     p.list_models().await.unwrap_or_default()
                 }
                 "deepseek" => {
-                    let p = DeepSeekProvider::new(api_key.unwrap_or_default(), base_url, model_opt.clone());
+                    let p = DeepSeekProvider::new(
+                        api_key.unwrap_or_default(),
+                        base_url,
+                        model_opt.clone(),
+                    );
                     p.list_models().await.unwrap_or_default()
                 }
                 "minimax" => {
-                    let p = MiniMaxProvider::new(api_key.unwrap_or_default(), base_url, model_opt.clone());
+                    let p = MiniMaxProvider::new(
+                        api_key.unwrap_or_default(),
+                        base_url,
+                        model_opt.clone(),
+                    );
                     p.list_models().await.unwrap_or_default()
                 }
                 _ => Vec::new(),
@@ -388,7 +506,12 @@ impl AppController {
         };
 
         if let Some((role, content)) = finalized_msg {
-            debug!("[app_controller]", "FINALIZED: adding to messages, role={}, content_len={}", role, content.len());
+            debug!(
+                "[app_controller]",
+                "FINALIZED: adding to messages, role={}, content_len={}",
+                role,
+                content.len()
+            );
             if let Some(chat_view) = self.get_chat_view_mut() {
                 chat_view.state.add_message(&role, &content);
                 chat_view.state.is_streaming = false;
@@ -402,7 +525,11 @@ impl AppController {
                     while let Ok(result) = rx.try_recv() {
                         match result {
                             Ok(chunk) => {
-                                debug!("[app_controller]", "CHUNK: received, chunk_len={}", chunk.len());
+                                debug!(
+                                    "[app_controller]",
+                                    "CHUNK: received, chunk_len={}",
+                                    chunk.len()
+                                );
                                 chunks.push(chunk);
                             }
                             Err(e) => {
@@ -416,7 +543,11 @@ impl AppController {
         };
 
         if !streaming_chunks.is_empty() {
-            trace!("[app_controller]", "CHUNKS: adding to messages, chunk_count={}", streaming_chunks.len());
+            trace!(
+                "[app_controller]",
+                "CHUNKS: adding to messages, chunk_count={}",
+                streaming_chunks.len()
+            );
             if let Some(chat_view) = self.get_chat_view_mut() {
                 for chunk in streaming_chunks {
                     chat_view.state.add_message("assistant", &chunk);
@@ -424,7 +555,6 @@ impl AppController {
             }
         }
 
-        let _ = self.ui_state.streaming_text.lock()
-            .map(|mut s| s.take());
+        let _ = self.ui_state.streaming_text.lock().map(|mut s| s.take());
     }
 }

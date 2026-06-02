@@ -1,4 +1,4 @@
-use rust_agent_platform::integration::mcp::{MCPClient, Tool, ContentBlock};
+use rust_agent_platform::integration::mcp::{ContentBlock, MCPClient, Tool};
 
 #[tokio::test]
 async fn test_mcp_client_creation() {

@@ -1,8 +1,8 @@
-use async_trait::async_trait;
-use swiftforge_provider_core::{LLMProvider, ToolCallingProvider, ProviderError};
-use swiftforge_types::{ModelResponse, Usage, Message, ToolDefinition, StreamingChunk};
-use swiftforge_provider_core::error::Result;
 use anyhow::Context;
+use async_trait::async_trait;
+use swiftforge_provider_core::error::Result;
+use swiftforge_provider_core::{LLMProvider, ProviderError, ToolCallingProvider};
+use swiftforge_types::{Message, ModelResponse, StreamingChunk, ToolDefinition, Usage};
 use tokio_stream::StreamExt;
 
 pub struct DeepSeekProvider {
@@ -52,7 +52,12 @@ fn log_raw_chunk(line: &str) {
 
 #[allow(dead_code)]
 /// Log parse state for each delta
-fn log_parse_state(reasoning: Option<&str>, content: Option<&str>, tool_calls_count: usize, is_thinking: bool) {
+fn log_parse_state(
+    reasoning: Option<&str>,
+    content: Option<&str>,
+    tool_calls_count: usize,
+    is_thinking: bool,
+) {
     let reasoning_preview = reasoning
         .map(|s| s.chars().take(80).collect::<String>())
         .map(|s| format!("\"{}\"", s))
@@ -61,8 +66,10 @@ fn log_parse_state(reasoning: Option<&str>, content: Option<&str>, tool_calls_co
         .map(|s| s.chars().take(80).collect::<String>())
         .map(|s| format!("\"{}\"", s))
         .unwrap_or_else(|| "None".to_string());
-    write_log(&format!("PARSE: reasoning={}, content={}, tools={}, is_thinking={}",
-        reasoning_preview, content_preview, tool_calls_count, is_thinking));
+    write_log(&format!(
+        "PARSE: reasoning={}, content={}, tools={}, is_thinking={}",
+        reasoning_preview, content_preview, tool_calls_count, is_thinking
+    ));
 }
 
 impl DeepSeekProvider {
@@ -86,7 +93,11 @@ impl DeepSeekProvider {
         let status = response.status();
         if !status.is_success() {
             let body = response.text().await.unwrap_or_default();
-            return Err(ProviderError::ApiError { status: status.as_u16(), message: body }.into());
+            return Err(ProviderError::ApiError {
+                status: status.as_u16(),
+                message: body,
+            }
+            .into());
         }
 
         let data: serde_json::Value = response.json().await?;
@@ -101,18 +112,25 @@ impl DeepSeekProvider {
         Ok(models)
     }
 
-    pub async fn chat_with_tools(&self, messages: Vec<Message>, tools: Vec<ToolDefinition>) -> Result<ModelResponse> {
+    pub async fn chat_with_tools(
+        &self,
+        messages: Vec<Message>,
+        tools: Vec<ToolDefinition>,
+    ) -> Result<ModelResponse> {
         let client = reqwest::Client::new();
-        let tools_json: Vec<serde_json::Value> = tools.into_iter().map(|t| {
-            serde_json::json!({
-                "type": "function",
-                "function": {
-                    "name": t.name,
-                    "description": t.description,
-                    "parameters": t.input_schema
-                }
+        let tools_json: Vec<serde_json::Value> = tools
+            .into_iter()
+            .map(|t| {
+                serde_json::json!({
+                    "type": "function",
+                    "function": {
+                        "name": t.name,
+                        "description": t.description,
+                        "parameters": t.input_schema
+                    }
+                })
             })
-        }).collect();
+            .collect();
 
         let request_body = serde_json::json!({
             "model": self.model,
@@ -163,7 +181,11 @@ impl DeepSeekProvider {
         Ok(response)
     }
 
-    pub async fn stream_chat(&self, messages: Vec<Message>, mut on_chunk: Box<dyn FnMut(StreamingChunk) + Send + Sync + 'static>) -> Result<()> {
+    pub async fn stream_chat(
+        &self,
+        messages: Vec<Message>,
+        mut on_chunk: Box<dyn FnMut(StreamingChunk) + Send + Sync + 'static>,
+    ) -> Result<()> {
         let client = reqwest::Client::new();
         let request_body = serde_json::json!({
             "model": self.model,
@@ -202,7 +224,9 @@ impl DeepSeekProvider {
                         return Ok(());
                     }
                     if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
-                        if let Some(reasoning) = json["choices"][0]["delta"]["reasoning_content"].as_str() {
+                        if let Some(reasoning) =
+                            json["choices"][0]["delta"]["reasoning_content"].as_str()
+                        {
                             if !reasoning.is_empty() {
                                 on_chunk(StreamingChunk::Reasoning(reasoning.to_string()));
                             }
@@ -220,18 +244,26 @@ impl DeepSeekProvider {
         Ok(())
     }
 
-    pub async fn stream_chat_with_tools(&self, messages: Vec<Message>, tools: Vec<ToolDefinition>, mut on_chunk: Box<dyn FnMut(StreamingChunk) + Send + Sync + 'static>) -> Result<()> {
+    pub async fn stream_chat_with_tools(
+        &self,
+        messages: Vec<Message>,
+        tools: Vec<ToolDefinition>,
+        mut on_chunk: Box<dyn FnMut(StreamingChunk) + Send + Sync + 'static>,
+    ) -> Result<()> {
         let client = reqwest::Client::new();
-        let tools_json: Vec<serde_json::Value> = tools.into_iter().map(|t| {
-            serde_json::json!({
-                "type": "function",
-                "function": {
-                    "name": t.name,
-                    "description": t.description,
-                    "parameters": t.input_schema
-                }
+        let tools_json: Vec<serde_json::Value> = tools
+            .into_iter()
+            .map(|t| {
+                serde_json::json!({
+                    "type": "function",
+                    "function": {
+                        "name": t.name,
+                        "description": t.description,
+                        "parameters": t.input_schema
+                    }
+                })
             })
-        }).collect();
+            .collect();
 
         let request_body = serde_json::json!({
             "model": self.model,
@@ -272,7 +304,9 @@ impl DeepSeekProvider {
                         return Ok(());
                     }
                     if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
-                        if let Some(reasoning) = json["choices"][0]["delta"]["reasoning_content"].as_str() {
+                        if let Some(reasoning) =
+                            json["choices"][0]["delta"]["reasoning_content"].as_str()
+                        {
                             if !reasoning.is_empty() {
                                 on_chunk(StreamingChunk::Reasoning(reasoning.to_string()));
                             }
@@ -282,11 +316,17 @@ impl DeepSeekProvider {
                                 on_chunk(StreamingChunk::Content(content.to_string()));
                             }
                         }
-                        if let Some(tool_calls) = json["choices"][0]["delta"]["tool_calls"].as_array() {
+                        if let Some(tool_calls) =
+                            json["choices"][0]["delta"]["tool_calls"].as_array()
+                        {
                             for tool_call in tool_calls {
                                 if let Some(func) = tool_call.get("function") {
-                                    let name = func.get("name").and_then(|n| n.as_str()).unwrap_or("");
-                                    let arguments = func.get("arguments").and_then(|a| a.as_str()).unwrap_or("");
+                                    let name =
+                                        func.get("name").and_then(|n| n.as_str()).unwrap_or("");
+                                    let arguments = func
+                                        .get("arguments")
+                                        .and_then(|a| a.as_str())
+                                        .unwrap_or("");
                                     if !name.is_empty() {
                                         on_chunk(StreamingChunk::ToolCall {
                                             name: name.to_string(),
@@ -334,10 +374,13 @@ impl LLMProvider for DeepSeekProvider {
             .context("No content in response")?
             .to_string();
 
-        Ok(ModelResponse::new(content, Usage {
-            input_tokens: data["usage"]["prompt_tokens"].as_u64().unwrap_or(0) as u32,
-            output_tokens: data["usage"]["completion_tokens"].as_u64().unwrap_or(0) as u32,
-        }))
+        Ok(ModelResponse::new(
+            content,
+            Usage {
+                input_tokens: data["usage"]["prompt_tokens"].as_u64().unwrap_or(0) as u32,
+                output_tokens: data["usage"]["completion_tokens"].as_u64().unwrap_or(0) as u32,
+            },
+        ))
     }
 
     fn provider_name(&self) -> &str {
@@ -348,14 +391,22 @@ impl LLMProvider for DeepSeekProvider {
         Self::list_models(self).await
     }
 
-    async fn stream_chat(&self, messages: Vec<Message>, on_chunk: Box<dyn FnMut(StreamingChunk) + Send + Sync + 'static>) -> Result<()> {
+    async fn stream_chat(
+        &self,
+        messages: Vec<Message>,
+        on_chunk: Box<dyn FnMut(StreamingChunk) + Send + Sync + 'static>,
+    ) -> Result<()> {
         Self::stream_chat(self, messages, on_chunk).await
     }
 }
 
 #[async_trait]
 impl ToolCallingProvider for DeepSeekProvider {
-    async fn chat_with_tools(&self, messages: Vec<Message>, tools: Vec<ToolDefinition>) -> Result<ModelResponse> {
+    async fn chat_with_tools(
+        &self,
+        messages: Vec<Message>,
+        tools: Vec<ToolDefinition>,
+    ) -> Result<ModelResponse> {
         Self::chat_with_tools(self, messages, tools).await
     }
 
@@ -363,7 +414,12 @@ impl ToolCallingProvider for DeepSeekProvider {
         "deepseek"
     }
 
-    async fn stream_chat_with_tools(&self, messages: Vec<Message>, tools: Vec<ToolDefinition>, on_chunk: Box<dyn FnMut(StreamingChunk) + Send + Sync + 'static>) -> Result<()> {
+    async fn stream_chat_with_tools(
+        &self,
+        messages: Vec<Message>,
+        tools: Vec<ToolDefinition>,
+        on_chunk: Box<dyn FnMut(StreamingChunk) + Send + Sync + 'static>,
+    ) -> Result<()> {
         Self::stream_chat_with_tools(self, messages, tools, on_chunk).await
     }
 }

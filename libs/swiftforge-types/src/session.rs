@@ -74,7 +74,9 @@ impl Session {
             return Ok(());
         }
 
-        let history: String = self.messages.iter()
+        let history: String = self
+            .messages
+            .iter()
             .rev()
             .take(50)
             .map(|m| format!("{}: {}", m.role, m.content))
@@ -91,9 +93,11 @@ impl Session {
             history
         );
 
-        let summary_response = chat_fn(vec![
-            Message { role: "user".to_string(), content: prompt }
-        ]).await
+        let summary_response = chat_fn(vec![Message {
+            role: "user".to_string(),
+            content: prompt,
+        }])
+        .await
         .map_err(|e| SessionError::CompactFailed(e.to_string()))?;
 
         let recent_messages: Vec<Message> = self.messages.iter().rev().take(5).cloned().collect();
