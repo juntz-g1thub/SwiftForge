@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use swiftforge_provider_core::{LLMProvider, ToolCallingProvider, ProviderError};
-use swiftforge_types::{ModelResponse, Usage, Message, ToolDefinition};
+use swiftforge_types::{ModelResponse, Usage, Message, ToolDefinition, StreamingChunk};
 use swiftforge_provider_core::error::Result;
 use tokio_stream::StreamExt;
 
@@ -110,7 +110,7 @@ impl OpenAIProvider {
         Ok(response)
     }
 
-    pub async fn stream_chat(&self, messages: Vec<Message>, mut on_chunk: Box<dyn FnMut(String) + Send + Sync + 'static>) -> Result<()> {
+    pub async fn stream_chat(&self, messages: Vec<Message>, mut on_chunk: Box<dyn FnMut(StreamingChunk) + Send + Sync + 'static>) -> Result<()> {
         let client = reqwest::Client::new();
         let response = client
             .post(format!("{}/chat/completions", self.base_url))
@@ -141,7 +141,7 @@ impl OpenAIProvider {
                     }
                     if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
                         if let Some(content) = json["choices"][0]["delta"]["content"].as_str() {
-                            on_chunk(content.to_string());
+                            on_chunk(StreamingChunk::Content(content.to_string()));
                         }
                     }
                 }
@@ -151,7 +151,7 @@ impl OpenAIProvider {
         Ok(())
     }
 
-    pub async fn stream_chat_with_tools(&self, messages: Vec<Message>, tools: Vec<ToolDefinition>, mut on_chunk: Box<dyn FnMut(String) + Send + Sync + 'static>) -> Result<()> {
+    pub async fn stream_chat_with_tools(&self, messages: Vec<Message>, tools: Vec<ToolDefinition>, mut on_chunk: Box<dyn FnMut(StreamingChunk) + Send + Sync + 'static>) -> Result<()> {
         let client = reqwest::Client::new();
         let tools_json: Vec<serde_json::Value> = tools.into_iter().map(|t| {
             serde_json::json!({
@@ -196,7 +196,7 @@ impl OpenAIProvider {
                     }
                     if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
                         if let Some(content) = json["choices"][0]["delta"]["content"].as_str() {
-                            on_chunk(content.to_string());
+                            on_chunk(StreamingChunk::Content(content.to_string()));
                         }
                     }
                 }
@@ -243,7 +243,7 @@ impl LLMProvider for OpenAIProvider {
         Self::list_models(self).await
     }
 
-    async fn stream_chat(&self, messages: Vec<Message>, on_chunk: Box<dyn FnMut(String) + Send + Sync + 'static>) -> Result<()> {
+    async fn stream_chat(&self, messages: Vec<Message>, on_chunk: Box<dyn FnMut(StreamingChunk) + Send + Sync + 'static>) -> Result<()> {
         Self::stream_chat(self, messages, on_chunk).await
     }
 }
@@ -258,7 +258,7 @@ impl ToolCallingProvider for OpenAIProvider {
         "openai"
     }
 
-    async fn stream_chat_with_tools(&self, messages: Vec<Message>, tools: Vec<ToolDefinition>, on_chunk: Box<dyn FnMut(String) + Send + Sync + 'static>) -> Result<()> {
+    async fn stream_chat_with_tools(&self, messages: Vec<Message>, tools: Vec<ToolDefinition>, on_chunk: Box<dyn FnMut(StreamingChunk) + Send + Sync + 'static>) -> Result<()> {
         Self::stream_chat_with_tools(self, messages, tools, on_chunk).await
     }
 }
