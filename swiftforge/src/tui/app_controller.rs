@@ -12,7 +12,7 @@ use tokio::runtime::Builder;
 use tokio::sync::Mutex as TokioMutex;
 use tokio::sync::RwLock;
 
-use crate::core::{Agent, AgentConfig, AgentRole};
+use crate::core::{Agent, AgentConfig, AgentRole, SessionManager};
 use crate::tui::config::ConfigManager;
 use swiftforge_mcp::{McpConnectionPool, McpToolLoader};
 use swiftforge_provider_core::ProviderRegistry;
@@ -33,6 +33,7 @@ pub struct AppController {
     should_quit: bool,
     mcp_pool: Option<Arc<McpConnectionPool>>,
     mcp_loader: Option<Arc<McpToolLoader>>,
+    session_manager: Option<Arc<SessionManager>>,
 }
 
 impl AppController {
@@ -41,6 +42,25 @@ impl AppController {
             .enable_all()
             .build()
             .expect("Failed to create tokio runtime");
+
+        let config = ConfigManager::new();
+        let session_manager = if let Some(data_dir) = config.get_session_data_dir() {
+            match SessionManager::new(data_dir) {
+                Ok(sm) => Some(Arc::new(sm)),
+                Err(e) => {
+                    warn!("[session]", "Failed to create SessionManager: {}", e);
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
+        if let Some(ref sm) = session_manager {
+            if let Err(e) = runtime.block_on(sm.create_session("default", 128_000)) {
+                warn!("[session]", "Failed to create default session: {}", e);
+            }
+        }
 
         let mut tool_registry = ToolRegistry::new();
         tool_registry.register(BashTool::new());
@@ -178,6 +198,7 @@ impl AppController {
             should_quit: false,
             mcp_pool: Some(mcp_pool),
             mcp_loader: Some(mcp_loader),
+            session_manager,
         })
     }
 

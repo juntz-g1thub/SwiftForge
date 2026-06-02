@@ -241,6 +241,10 @@ impl ConfigManager {
         self.config.mcp_url = url;
         self.dirty = true;
     }
+
+    pub fn get_session_data_dir(&self) -> Option<PathBuf> {
+        dirs::data_dir().map(|d| d.join("FastCode").join("sessions"))
+    }
 }
 
 pub struct ProviderInfo {
