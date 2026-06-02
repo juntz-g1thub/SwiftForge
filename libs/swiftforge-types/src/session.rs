@@ -1,5 +1,13 @@
+use crate::ModelResponse;
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
+
+#[async_trait]
+pub trait LLMProvider: Send + Sync {
+    async fn chat(&self, messages: Vec<Message>) -> anyhow::Result<ModelResponse>;
+    fn provider_name(&self) -> &str;
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionConfig {
@@ -62,6 +70,54 @@ impl Session {
 
     pub fn estimate_token_count(&self) -> usize {
         self.token_count
+    }
+
+    pub async fn compact(&mut self, llm_provider: &dyn LLMProvider) -> Result<(), SessionError> {
+        if self.messages.len() < 10 {
+            return Ok(());
+        }
+
+        let history: String = self.messages.iter()
+            .rev()
+            .take(50)
+            .map(|m| format!("{}: {}", m.role, m.content))
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let prompt = format!(
+            "Summarize this conversation concisely, preserving key information, decisions, and context.\n\
+            Keep the summary under 500 tokens.\n\
+            Conversation:\n{}",
+            history
+        );
+
+        let summary_response = llm_provider.chat(vec![
+            Message { role: "user".to_string(), content: prompt }
+        ]).await
+        .map_err(|e| SessionError::CompactFailed(e.to_string()))?;
+
+        let recent_messages: Vec<Message> = self.messages.iter().rev().take(5).cloned().collect();
+
+        self.messages.clear();
+        self.messages.push_back(Message {
+            role: "system".to_string(),
+            content: format!(
+                "[Previous conversation summarized: {}]\n\n[Last {} messages preserved]",
+                summary_response.content.trim(),
+                recent_messages.len()
+            ),
+        });
+
+        for msg in recent_messages.into_iter().rev() {
+            self.messages.push_back(msg);
+        }
+
+        self.token_count = self.estimate_token_count();
+
+        Ok(())
     }
 }
 
