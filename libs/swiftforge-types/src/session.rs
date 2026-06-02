@@ -85,3 +85,5 @@ impl Message {
         }
     }
 }
+
+pub use crate::session_error::SessionError;
