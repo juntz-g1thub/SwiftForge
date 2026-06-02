@@ -27,7 +27,7 @@
 | T5 | McpToolLoader | MCP 工具加载器 | 高 | ✅ 已完成 | 同上 |
 | T6 | AppController MCP 初始化 | MCP 初始化逻辑集成到 AppController | 中 | ✅ 已完成 | 同上 |
 | T7 | 并发工具执行 | `execute_independent_tool_calls` 实现 | 中 | ✅ 已完成 | - |
-| T8 | DeepSeek reasoning 累积 | reasoning_history 管理和反馈 | 高 | 📋 规划中 | - |
+| T8 | DeepSeek reasoning 累积 | reasoning_history 管理和反馈 | 高 | ✅ 已完成 | [2026-06-02-reasoning-content-handling-design](../specs/2026-06-02-reasoning-content-handling-design.md) |
 | T9 | Session 集成 | Session 管理器与 Agent 集成 | 中 | 📋 规划中 | - |
 | T10 | Orchestration 集成 | TaskScheduler/MessageBus 与 Agent 集成 | 低 | 📋 规划中 | - |
 | T11 | DeepSeek 文本标签移除 | 删除 `stream_chat_with_tools` 中的 `<thinking>`, `<content>`, `<tool_call>` 文本标签，使用标准 JSON 格式 | 中 | ✅ 已完成 | - |
@@ -313,13 +313,11 @@ pub async fn execute_tool_calls(&self, calls: Vec<ToolCall>) -> Result<Vec<ToolR
 
 #### Agent Loop
 
-**当前状态**: ⚠️ 部分完成
+**当前状态**: ✅ 已实现
 
 **已完成**:
 - ✅ 并发工具执行 (T7) - `futures::future::join_all`
-
-**待完成**:
-- 📋 reasoning 累积 (T8)
+- ✅ reasoning 累积 (T8) - `StreamingChunk::Reasoning` 区分，`reasoning_history` 字段
 
 **结论**: 并发工具执行、reasoning累积
 
@@ -431,9 +429,9 @@ pub async fn execute_tool_calls(&self, calls: Vec<ToolCall>) -> Result<Vec<ToolR
 - T5 McpToolLoader
 - T6 AppController MCP 初始化
 
-### ⏳ M3: Agent Loop 增强 (进行中)
+### ✅ M3: Agent Loop 增强 (已完成)
 - ✅ T7 并发工具执行
-- ⏳ T8 DeepSeek reasoning 累积
+- ✅ T8 DeepSeek reasoning 累积
 
 ### ⏳ M4: 集成完善 (待完成)
 - T9 Session 集成
