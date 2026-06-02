@@ -4,11 +4,11 @@ version.workspace = true
 edition.workspace = true
 
 [lib]
-name = "rust_agent_platform"
+name = "swiftforge"
 path = "src/lib.rs"
 
 [[bin]]
-name = "ragent"
+name = "swiftforge"
 path = "src/main.rs"
 
 [dependencies]

@@ -104,7 +104,7 @@ impl AppConfig {
     fn config_path() -> PathBuf {
         dirs::config_dir()
             .unwrap_or_else(|| PathBuf::from("."))
-            .join("FastCode")
+            .join("swiftforge")
             .join("config.json")
     }
 }
@@ -243,7 +243,7 @@ impl ConfigManager {
     }
 
     pub fn get_session_data_dir(&self) -> Option<PathBuf> {
-        dirs::data_dir().map(|d| d.join("FastCode").join("sessions"))
+        dirs::data_dir().map(|d| d.join("swiftforge").join("sessions"))
     }
 }
 

@@ -1,43 +1,48 @@
-# FASTCODE
+# SwiftForge
 
 ## Project
 
-Rust-based TUI agent platform with streaming LLM support, tool calling, and debug panel.
+**SwiftForge** — 高效 Agent 运行平台，支持开发者构建和运行自己的 Agent。
+
+Rust-based TUI agent platform with streaming LLM support, tool calling, MCP integration, and debug panel.
 
 ---
 
-## Architecture
+## Workspace Structure
 
 ```
-rust-agent-platform/src/
-├── main.rs                    # Binary entry point
-├── lib.rs                     # Library exports
-├── core/                      # Core types (Agent, Tool, Session, Provider)
-├── tools/                     # Built-in tools (bash, read, write, edit, grep)
-├── tui/                       # Terminal UI (ratatui-based)
-│   ├── app_controller.rs      # Main controller
-│   ├── components/            # UI components (input_area, message_list, scroll_bar, status_bar)
-│   ├── state/                 # State management (action, app_context, view_state)
-│   └── views/                 # Views (chat_view, config_view, debug_view)
-├── providers/                 # LLM providers
-│   ├── openai.rs              # OpenAI GPT models
-│   ├── anthropic.rs           # Anthropic Claude models
-│   ├── deepseek.rs            # DeepSeek models
-│   ├── ollama.rs              # Ollama local models
-│   ├── minimax.rs             # MiniMax models
-│   └── custom.rs              # Custom/provider
-├── platform/                  # Platform features
-│   ├── boulder.rs             # TODO persistence (SQLite)
-│   ├── boulder_db.rs          # Boulder database
-│   ├── hooks/                 # Hook system (52 hooks)
-│   ├── skill/                 # Skill loading (SKILL.md)
-│   ├── intent_gate.rs         # Intent classification
-│   └── category.rs            # Category definitions
-├── orchestration/             # Multi-agent orchestration
-│   ├── scheduler.rs           # Task scheduler
-│   └── message_bus.rs         # Message bus
-└── integration/              # External integrations
-    └── mcp/                   # MCP client (protocol, client)
+SwiftForge/
+├── Cargo.toml                  # Workspace root
+├── swiftforge/                  # Main application crate
+│   ├── src/
+│   │   ├── main.rs              # Binary entry point
+│   │   ├── lib.rs
+│   │   ├── core/               # Agent core (agent.rs, session_manager.rs)
+│   │   ├── platform/            # Boulder, intent_gate, category
+│   │   └── tui/                 # Terminal UI (ratatui-based)
+│   │       ├── app_controller.rs
+│   │       ├── components/       # UI components
+│   │       ├── state/           # State management
+│   │       ├── views/           # Chat, config, debug views
+│   │       └── task/            # Task coordinator & events
+│   └── Cargo.toml
+│
+└── libs/                        # Workspace members
+    ├── swiftforge-types/         # Core types (Message, Tool, Provider, Session)
+    ├── swiftforge-task/          # Task scheduler & message bus
+    ├── swiftforge-tools/         # Built-in tools (bash, read, write, edit, grep)
+    ├── swiftforge-providers/     # LLM providers
+    │   ├── openai.rs
+    │   ├── anthropic.rs
+    │   ├── deepseek.rs
+    │   ├── ollama.rs
+    │   ├── minimax.rs
+    │   └── custom.rs
+    ├── swiftforge-provider-core/ # Provider traits & registry
+    ├── swiftforge-mcp/          # MCP client (protocol, client, pool, loader)
+    ├── swiftforge-hooks/        # Hook system (52 hooks)
+    ├── swiftforge-skill/         # Skill loader (SKILL.md)
+    └── swiftforge-log/          # Logging (tracing-based)
 ```
 
 ---
@@ -53,7 +58,7 @@ Skills defined in `SKILL.md` files with YAML frontmatter (`name`, `description`,
 Loaded via `SkillLoader::load_skill(path)`.
 
 ### Hook System
-52 hooks defined in `platform/hooks/`. Hook lifecycle events for agent orchestration.
+52 hooks defined in `swiftforge-hooks/`. Hook lifecycle events for agent orchestration.
 Use `HookRegistry` to register callbacks.
 
 ### Boulder (TODO)
@@ -74,16 +79,14 @@ SQLite-backed TODO persistence via `BoulderStore`. Uses temp directories for tes
 ## Build & Run
 
 ```bash
-cd rust-agent-platform
-
 # Build
-cargo build --bin ragent
+cargo build --bin swiftforge
 
 # Run without debug
-cargo run --bin ragent
+cargo run --bin swiftforge
 
 # Run with debug panel
-cargo run --bin ragent -- --debug
+cargo run --bin swiftforge -- --debug
 
 # Tests
 cargo test

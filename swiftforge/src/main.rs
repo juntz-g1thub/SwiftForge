@@ -1,10 +1,10 @@
 use clap::Parser;
-use rust_agent_platform::tui::app_controller::AppController;
+use swiftforge::tui::app_controller::AppController;
 use swiftforge_log::{info, init_log, LogLevel};
 
 #[derive(Parser, Debug)]
-#[command(name = "ragent")]
-#[command(about = "Rust Agent Platform - TUI")]
+#[command(name = "swiftforge")]
+#[command(about = "SwiftForge - Agent Platform TUI")]
 struct Args {
     #[arg(short, long, help = "Enable debug logging (TRACE level)")]
     debug: bool,
@@ -15,8 +15,11 @@ fn main() -> anyhow::Result<()> {
 
     let log_dir = dirs::home_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join(".fastcode");
-    let log_path = log_dir.join("ragent.log");
+        .join(".swiftforge")
+        .join("log");
+
+    let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S");
+    let log_path = log_dir.join(format!("swiftforge_{}.log", timestamp));
 
     let level = if args.debug {
         LogLevel::TRACE
