@@ -166,18 +166,9 @@ pub async fn execute_tool_calls(&self, calls: Vec<ToolCall>) -> Result<Vec<ToolR
 
 **位置**: `core/agent.rs`
 
-**字段**:
-```rust
-reasoning_history: Arc<Mutex<Vec<String>>>
-```
+**设计**: [2026-06-02-reasoning-content-handling-design.md](../specs/2026-06-02-reasoning-content-handling-design.md)
 
-**方法**:
-- `add_reasoning(content: String)` - 添加
-- `get_reasoning_history() -> Vec<String>` - 获取
-- `clear_reasoning()` - 清空
-- `format_reasoning_for_next_turn() -> Option<String>` - 格式化
-
-**状态**: 📋 规划中
+**状态**: 📋 规划中（待审批）
 
 ---
 

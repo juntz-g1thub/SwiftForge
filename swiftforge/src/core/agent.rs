@@ -7,7 +7,7 @@ use serde_json::Value as JsonValue;
 use swiftforge_log::{info, debug, warn, error, LogLevel};
 use swiftforge_task::{TaskScheduler, Task, MessageBus, AgentMessage};
 use swiftforge_provider_core::{DynLLMProvider, DynToolCallingProvider, LLMProvider, ToolCallingProvider};
-use swiftforge_types::{Message, ModelResponse, Usage, ToolRegistry, ToolCall, ToolResult, ToolDefinition};
+use swiftforge_types::{Message, ModelResponse, Usage, ToolRegistry, ToolCall, ToolResult, ToolDefinition, StreamingChunk};
 use swiftforge_tools::ToolCallParser;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -37,6 +37,7 @@ pub struct Agent {
     tool_provider: Option<DynToolCallingProvider>,
     tool_registry: Option<Arc<ToolRegistry>>,
     tool_parser: ToolCallParser,
+    reasoning_history: Arc<std::sync::Mutex<Vec<String>>>,
 }
 
 impl Agent {
@@ -49,6 +50,7 @@ impl Agent {
             tool_provider: None,
             tool_registry: None,
             tool_parser: ToolCallParser::new(),
+            reasoning_history: Arc::new(std::sync::Mutex::new(Vec::new())),
         }
     }
 
@@ -151,7 +153,7 @@ impl Agent {
     }
 
     pub async fn chat_with_tools_streaming<F>(&self, messages: Vec<Message>, on_chunk: F) -> Result<ModelResponse>
-        where F: FnMut(String) + Send + Sync + 'static
+        where F: FnMut(StreamingChunk) + Send + Sync + 'static
     {
         debug!("[provider]", "chat_with_tools_streaming called");
         let provider = self.tool_provider.as_ref()
@@ -160,41 +162,55 @@ impl Agent {
         let tools = self.get_tool_definitions();
         debug!("[provider]", "Got {} tools", tools.len());
 
-        let accumulated = Arc::new(std::sync::Mutex::new(String::new()));
-        let accumulated_clone = accumulated.clone();
+        let accumulated_content = Arc::new(std::sync::Mutex::new(String::new()));
+        let accumulated_content_clone = accumulated_content.clone();
+        let accumulated_reasoning = Arc::new(std::sync::Mutex::new(String::new()));
+        let accumulated_reasoning_clone = accumulated_reasoning.clone();
         let on_chunk = Arc::new(std::sync::Mutex::new(on_chunk));
         let on_chunk_clone = on_chunk.clone();
         let tool_calls_json = Arc::new(std::sync::Mutex::new(Vec::new()));
         let tool_calls_json_clone = tool_calls_json.clone();
 
-        let on_chunk_wrapper = Box::new(move |chunk: String| {
-            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&chunk) {
-                if let Some(name) = json.get("name").and_then(|n| n.as_str()) {
-                    if let Some(arguments) = json.get("arguments").and_then(|a| a.as_str()) {
-                        let tc_json = serde_json::json!({
-                            "name": name,
-                            "arguments": arguments
-                        });
-                        tool_calls_json_clone.lock().unwrap().push(tc_json);
-                        return;
+        let on_chunk_wrapper = Box::new(move |chunk: StreamingChunk| {
+            match chunk {
+                StreamingChunk::Reasoning(text) => {
+                    accumulated_reasoning_clone.lock().unwrap().push_str(&text);
+                    if let Ok(mut cb) = on_chunk_clone.lock() {
+                        cb(StreamingChunk::Reasoning(text));
                     }
                 }
-            }
-
-            accumulated_clone.lock().unwrap().push_str(&chunk);
-
-            if let Ok(mut cb) = on_chunk_clone.lock() {
-                cb(chunk.clone());
+                StreamingChunk::Content(text) => {
+                    accumulated_content_clone.lock().unwrap().push_str(&text);
+                    if let Ok(mut cb) = on_chunk_clone.lock() {
+                        cb(StreamingChunk::Content(text));
+                    }
+                }
+                StreamingChunk::ToolCall { name, arguments } => {
+                    let tc_json = serde_json::json!({
+                        "name": name,
+                        "arguments": arguments
+                    });
+                    tool_calls_json_clone.lock().unwrap().push(tc_json);
+                }
             }
         });
 
         provider.stream_chat_with_tools(messages, tools, on_chunk_wrapper).await.map_err(|e: swiftforge_provider_core::ProviderError| anyhow::anyhow!("{:?}", e))?;
 
-        let result = accumulated.lock().unwrap().clone();
+        let content = accumulated_content.lock().unwrap().clone();
+        let reasoning = accumulated_reasoning.lock().unwrap().clone();
         let tool_calls = tool_calls_json.lock().unwrap().clone();
-        let mut response = ModelResponse::new(result, Usage { input_tokens: 0, output_tokens: 0 });
+
+        if !reasoning.is_empty() {
+            self.reasoning_history.lock().unwrap().push(reasoning.clone());
+        }
+
+        let mut response = ModelResponse::new(content, Usage { input_tokens: 0, output_tokens: 0 });
         if !tool_calls.is_empty() {
             response = response.with_tool_calls(tool_calls);
+        }
+        if !reasoning.is_empty() {
+            response = response.with_reasoning_content(reasoning);
         }
         Ok(response)
     }
@@ -215,9 +231,14 @@ impl Agent {
             info!("[agent]", "Agent loop iteration {}", i + 1);
 
             let stream_ui_clone = stream_ui.clone();
-            let on_chunk = move |chunk: String| {
+            let on_chunk = move |chunk: StreamingChunk| {
                 if let Some(ref t) = stream_ui_clone {
-                    let _ = t.send(Ok(chunk));
+                    let text = match chunk {
+                        StreamingChunk::Reasoning(s) => s,
+                        StreamingChunk::Content(s) => s,
+                        StreamingChunk::ToolCall { name, arguments } => format!("[Tool: {}] {}", name, arguments),
+                    };
+                    let _ = t.send(Ok(text));
                 }
             };
 

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use async_trait::async_trait;
-use swiftforge_types::{Message, ModelResponse, ToolDefinition};
+use swiftforge_types::{Message, ModelResponse, ToolDefinition, StreamingChunk};
 use crate::error::Result;
 
 #[async_trait]
@@ -11,7 +11,7 @@ pub trait LLMProvider: Send + Sync {
     async fn stream_chat(
         &self,
         messages: Vec<Message>,
-        on_chunk: Box<dyn FnMut(String) + Send + Sync + 'static>
+        on_chunk: Box<dyn FnMut(StreamingChunk) + Send + Sync + 'static>
     ) -> Result<()>;
 }
 
@@ -29,7 +29,7 @@ pub trait ToolCallingProvider: Send + Sync {
         &self,
         messages: Vec<Message>,
         tools: Vec<ToolDefinition>,
-        on_chunk: Box<dyn FnMut(String) + Send + Sync + 'static>
+        on_chunk: Box<dyn FnMut(StreamingChunk) + Send + Sync + 'static>
     ) -> Result<()>;
 }
 
