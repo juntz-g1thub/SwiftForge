@@ -4,7 +4,7 @@ use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use swiftforge_log::{debug, error, info, warn, LogLevel};
+use swiftforge_log::{debug, info, warn};
 use swiftforge_provider_core::{DynLLMProvider, DynToolCallingProvider, ToolCallingProvider};
 use swiftforge_task::{AgentMessage, MessageBus, Task, TaskScheduler};
 use swiftforge_tools::ToolCallParser;

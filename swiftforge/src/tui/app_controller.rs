@@ -31,7 +31,9 @@ pub struct AppController {
     runtime: tokio::runtime::Runtime,
     current_view: Box<dyn View>,
     should_quit: bool,
+    #[allow(unused)]
     mcp_pool: Option<Arc<McpConnectionPool>>,
+    #[allow(unused)]
     mcp_loader: Option<Arc<McpToolLoader>>,
     session_manager: Option<Arc<SessionManager>>,
 }
@@ -401,6 +403,7 @@ impl AppController {
 
         let streaming_text = Arc::clone(&self.ui_state.streaming_text);
         let finalized_message = Arc::clone(&self.ui_state.finalized_message);
+        let session_manager = self.session_manager.clone();
 
         runtime.spawn(async move {
             debug!(
@@ -416,11 +419,26 @@ impl AppController {
                 }
             }
 
-            let session = Arc::new(RwLock::new(Session::new(
-                uuid::Uuid::new_v4().to_string(),
-                "temp".to_string(),
-                100,
-            )));
+            // Use session from session_manager, or create temp if not available
+            let session = if let Some(ref sm) = session_manager {
+                sm.get_current_session()
+                    .await
+                    .map(|s| Arc::new(RwLock::new(s)))
+                    .unwrap_or_else(|| {
+                        Arc::new(RwLock::new(Session::new(
+                            uuid::Uuid::new_v4().to_string(),
+                            "temp".to_string(),
+                            100,
+                        )))
+                    })
+            } else {
+                Arc::new(RwLock::new(Session::new(
+                    uuid::Uuid::new_v4().to_string(),
+                    "temp".to_string(),
+                    100,
+                )))
+            };
+
             let result = final_agent.run_agent_loop(session, &msg, 5, Some(tx)).await;
 
             match result {

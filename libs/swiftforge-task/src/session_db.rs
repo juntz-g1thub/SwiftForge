@@ -1,15 +1,19 @@
 use rusqlite::{params, Connection};
 use std::collections::VecDeque;
 use std::path::PathBuf;
+use std::sync::Mutex;
 use swiftforge_types::{Message, Session, SessionError};
 
 pub struct SessionDatabase {
-    conn: Connection,
+    conn: Mutex<Connection>,
 }
 
+unsafe impl Send for SessionDatabase {}
+unsafe impl Sync for SessionDatabase {}
+
 impl SessionDatabase {
-    pub fn new(path: &PathBuf) -> Result<Self, SessionError> {
-        let conn = Connection::open(path)?;
+    pub fn new(path: PathBuf) -> Result<Self, SessionError> {
+        let conn = Connection::open(&path)?;
         conn.execute(
             "CREATE TABLE IF NOT EXISTS sessions (
                 id TEXT PRIMARY KEY,
@@ -23,14 +27,16 @@ impl SessionDatabase {
             )",
             [],
         )?;
-        Ok(Self { conn })
+        Ok(Self {
+            conn: Mutex::new(conn),
+        })
     }
 
     pub fn save(&self, session: &Session) -> Result<(), SessionError> {
         let messages_json = serde_json::to_string(&session.messages)
             .map_err(|e| SessionError::SaveFailed(e.to_string()))?;
 
-        self.conn.execute(
+        self.conn.lock().unwrap().execute(
             "INSERT OR REPLACE INTO sessions
              (id, name, messages_json, context_window, max_tokens, token_count, created_at, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
@@ -49,7 +55,8 @@ impl SessionDatabase {
     }
 
     pub fn load(&self, session_id: &str) -> Result<Option<Session>, SessionError> {
-        let mut stmt = self.conn.prepare(
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
             "SELECT id, name, messages_json, context_window, max_tokens, token_count, created_at, updated_at
              FROM sessions WHERE id = ?1"
         )?;
@@ -77,7 +84,8 @@ impl SessionDatabase {
     }
 
     pub fn load_all(&self) -> Result<Vec<Session>, SessionError> {
-        let mut stmt = self.conn.prepare(
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
             "SELECT id, name, messages_json, context_window, max_tokens, token_count, created_at, updated_at
              FROM sessions ORDER BY updated_at DESC"
         )?;
@@ -107,6 +115,8 @@ impl SessionDatabase {
 
     pub fn delete(&self, session_id: &str) -> Result<(), SessionError> {
         self.conn
+            .lock()
+            .unwrap()
             .execute("DELETE FROM sessions WHERE id = ?1", params![session_id])?;
         Ok(())
     }

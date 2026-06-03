@@ -18,7 +18,7 @@ impl SessionManager {
     pub fn new(data_dir: PathBuf) -> Result<Self, SessionError> {
         std::fs::create_dir_all(&data_dir).map_err(|e| SessionError::SaveFailed(e.to_string()))?;
         let db_path = data_dir.join("sessions.db");
-        let db = SessionDatabase::new(&db_path)?;
+        let db = SessionDatabase::new(db_path)?;
 
         Ok(Self {
             sessions: Arc::new(RwLock::new(HashMap::new())),
@@ -50,7 +50,15 @@ impl SessionManager {
         if let Some(session) = self.sessions.read().await.get(session_id) {
             return Some(session.clone());
         }
-        self.db.load(session_id).ok().flatten()
+        if let Some(session) = self.db.load(session_id).ok().flatten() {
+            self.sessions
+                .write()
+                .await
+                .insert(session_id.to_string(), session.clone());
+            Some(session)
+        } else {
+            None
+        }
     }
 
     pub async fn get_current_session(&self) -> Option<Session> {
@@ -91,6 +99,10 @@ impl SessionManager {
 
     pub async fn list_sessions(&self) -> Vec<(String, String)> {
         if let Ok(sessions) = self.db.load_all() {
+            let mut cache = self.sessions.write().await;
+            for session in &sessions {
+                cache.insert(session.id.clone(), session.clone());
+            }
             sessions
                 .into_iter()
                 .map(|s| (s.id.clone(), s.name.clone()))
