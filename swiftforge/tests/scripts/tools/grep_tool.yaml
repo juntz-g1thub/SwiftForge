@@ -1,0 +1,68 @@
+name: "GrepTool Test Suite"
+description: "测试 GrepTool 的文本搜索能力"
+version: "1.0"
+tags: ["tool", "grep", "search"]
+
+config:
+  provider:
+    type: "openai"
+    api_key: "${OPENAI_API_KEY}"
+    model: "gpt-4o"
+    temperature: 0.0
+    
+  agent:
+    name: "test-agent"
+    role: "Executor"
+    tools: ["bash"]
+    
+  environment:
+    timeout_ms: 15000
+
+steps:
+  - name: "create_test_file"
+    action: "tool_call"
+    tool: "bash"
+    arguments:
+      command: "cat > /tmp/search_file.txt << 'EOF'
+line 1: hello world
+line 2: foo bar
+line 3: hello again
+line 4: baz qux
+line 5: hello world
+EOF"
+    expect:
+      success: true
+
+  - name: "grep_hello"
+    action: "tool_call"
+    tool: "bash"
+    arguments:
+      command: "grep 'hello' /tmp/search_file.txt"
+    expect:
+      success: true
+      output_contains: "hello"
+
+  - name: "grep_multiple"
+    action: "tool_call"
+    tool: "bash"
+    arguments:
+      command: "grep -c 'hello' /tmp/search_file.txt"
+    expect:
+      success: true
+      output_contains: "2"
+
+  - name: "grep_no_match"
+    action: "tool_call"
+    tool: "bash"
+    arguments:
+      command: "grep 'notfound' /tmp/search_file.txt || echo 'no match'"
+    expect:
+      success: true
+
+  - name: "cleanup"
+    action: "tool_call"
+    tool: "bash"
+    arguments:
+      command: "rm /tmp/search_file.txt"
+    expect:
+      success: true

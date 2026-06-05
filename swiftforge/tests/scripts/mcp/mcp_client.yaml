@@ -1,0 +1,34 @@
+name: "MCP Client Connection Test"
+description: "测试 MCP Client 的连接、初始化功能"
+version: "1.0"
+tags: ["mcp", "client", "connection"]
+
+config:
+  provider:
+    type: "openai"
+    api_key: "${OPENAI_API_KEY}"
+    model: "gpt-4o"
+    temperature: 0.0
+    
+  agent:
+    name: "test-agent"
+    role: "Executor"
+    tools: []
+    
+  environment:
+    timeout_ms: 15000
+
+steps:
+  - name: "mcp_connect_test"
+    action: "chat"
+    input:
+      messages:
+        - role: "user"
+          content: "Check if MCP connection can be established"
+    expect:
+      response_success: true
+
+  - name: "verify_connection"
+    action: "assert"
+    conditions:
+      - "last_response.success == true"

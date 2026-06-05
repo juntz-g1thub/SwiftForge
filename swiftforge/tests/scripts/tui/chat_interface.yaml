@@ -1,0 +1,36 @@
+name: "TUI Chat Interface Test"
+description: "测试 TUI 聊天界面的基本交互功能"
+version: "1.0"
+tags: ["tui", "chat", "interface"]
+
+config:
+  provider:
+    type: "deepseek"
+    api_key: "${DEEPSEEK_API_KEY}"
+    model: "deepseek-v4-flash"
+    temperature: 0.0
+    
+  agent:
+    name: "test-agent"
+    role: "Executor"
+    tools: []
+    
+  environment:
+    timeout_ms: 15000
+
+steps:
+  - name: "tui_basic_chat"
+    action: "chat"
+    input:
+      messages:
+        - role: "user"
+          content: "Hello, respond with 'TUI test passed' if you receive this."
+    expect:
+      response_success: true
+      response_time_ms: 10000
+
+  - name: "verify_tui_response"
+    action: "assert"
+    conditions:
+      - "last_response.success == true"
+      - "len(last_response.content) > 0"

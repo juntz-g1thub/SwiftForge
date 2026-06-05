@@ -1,0 +1,37 @@
+name: "DeepSeek Provider Chat Test"
+description: "测试 DeepSeek Provider 的聊天功能 (含 reasoning)"
+version: "1.0"
+tags: ["provider", "deepseek", "chat", "reasoning"]
+
+config:
+  provider:
+    type: "deepseek"
+    api_key: "${DEEPSEEK_API_KEY}"
+    model: "deepseek-chat"
+    temperature: 0.0
+    
+  agent:
+    name: "test-agent"
+    role: "Executor"
+    tools: []
+    
+  environment:
+    timeout_ms: 30000
+
+steps:
+  - name: "simple_chat"
+    action: "chat"
+    input:
+      messages:
+        - role: "user"
+          content: "What is 2 + 2? Answer with just the number."
+    expect:
+      response_success: true
+      response_contains: "4"
+      response_time_ms: 20000
+
+  - name: "verify_response"
+    action: "assert"
+    conditions:
+      - "last_response.success == true"
+      - "len(last_response.content) > 0"

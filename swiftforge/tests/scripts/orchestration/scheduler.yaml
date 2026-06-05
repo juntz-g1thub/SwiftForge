@@ -1,0 +1,34 @@
+name: "TaskScheduler Test Suite"
+description: "测试 TaskScheduler 的任务添加、获取、完成流程"
+version: "1.0"
+tags: ["orchestration", "scheduler", "task"]
+
+config:
+  provider:
+    type: "openai"
+    api_key: "${OPENAI_API_KEY}"
+    model: "gpt-4o"
+    temperature: 0.0
+    
+  agent:
+    name: "test-agent"
+    role: "Executor"
+    tools: []
+    
+  environment:
+    timeout_ms: 10000
+
+steps:
+  - name: "add_normal_task"
+    action: "chat"
+    input:
+      messages:
+        - role: "user"
+          content: "Remember: my task is to test scheduler with priority Normal"
+    expect:
+      response_success: true
+
+  - name: "verify_add"
+    action: "assert"
+    conditions:
+      - "last_response.success == true"

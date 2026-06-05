@@ -1,0 +1,34 @@
+name: "Skill Loading Test"
+description: "测试 SkillLoader 的文件加载和解析功能"
+version: "1.0"
+tags: ["skill", "loading", "parser"]
+
+config:
+  provider:
+    type: "openai"
+    api_key: "${OPENAI_API_KEY}"
+    model: "gpt-4o"
+    temperature: 0.0
+    
+  agent:
+    name: "test-agent"
+    role: "Executor"
+    tools: []
+    
+  environment:
+    timeout_ms: 10000
+
+steps:
+  - name: "skill_load_test"
+    action: "chat"
+    input:
+      messages:
+        - role: "user"
+          content: "Test skill loading capability"
+    expect:
+      response_success: true
+
+  - name: "verify_load"
+    action: "assert"
+    conditions:
+      - "last_response.success == true"

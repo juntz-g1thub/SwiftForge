@@ -1,0 +1,46 @@
+name: "Agent Tool Call Parsing Test"
+description: "测试 Agent 解析 tool_calls 的能力 (JSON 和 XML 格式)"
+version: "1.0"
+tags: ["agent", "tool-call", "parsing"]
+
+config:
+  provider:
+    type: "openai"
+    api_key: "${OPENAI_API_KEY}"
+    model: "gpt-4o"
+    temperature: 0.0
+    
+  agent:
+    name: "test-agent"
+    role: "Executor"
+    tools: ["bash", "read"]
+    
+  environment:
+    timeout_ms: 30000
+
+steps:
+  - name: "create_test_file"
+    action: "tool_call"
+    tool: "bash"
+    arguments:
+      command: "echo 'test content' > /tmp/test_file.txt"
+    expect:
+      success: true
+
+  - name: "read_file"
+    action: "tool_call"
+    tool: "bash"
+    arguments:
+      command: "cat /tmp/test_file.txt"
+    expect:
+      success: true
+      output_contains: "test content"
+
+  - name: "list_files"
+    action: "tool_call"
+    tool: "bash"
+    arguments:
+      command: "ls -la /tmp | head -5"
+    expect:
+      success: true
+      output_contains: "test_file.txt"

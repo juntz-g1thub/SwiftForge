@@ -1,10 +1,10 @@
 mod components;
-mod config;
+pub mod config;
 mod state;
-mod task;
+pub mod task;
 mod views;
 
-pub use config::{AppConfig, ConfigManager};
+pub use config::{AppConfig, ConfigManager, ProviderSettings};
 pub use state::{
     Action, AppContext, ChatContext, ChatViewState, ConfigContext, ConfigViewState, UIState,
     ViewState, ViewStateKind,

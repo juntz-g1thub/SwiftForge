@@ -1,0 +1,64 @@
+name: "BashTool Test Suite"
+description: "测试 BashTool 的各种命令执行场景"
+version: "1.0"
+tags: ["tool", "bash", "execution"]
+
+config:
+  provider:
+    type: "openai"
+    api_key: "${OPENAI_API_KEY}"
+    model: "gpt-4o"
+    temperature: 0.0
+    
+  agent:
+    name: "test-agent"
+    role: "Executor"
+    tools: ["bash"]
+    
+  environment:
+    timeout_ms: 10000
+
+steps:
+  - name: "test_echo"
+    action: "tool_call"
+    tool: "bash"
+    arguments:
+      command: "echo 'hello world'"
+    expect:
+      success: true
+      output_contains: "hello world"
+
+  - name: "test_pwd"
+    action: "tool_call"
+    tool: "bash"
+    arguments:
+      command: "pwd"
+    expect:
+      success: true
+      output_contains: "/"
+
+  - name: "test_env_vars"
+    action: "tool_call"
+    tool: "bash"
+    arguments:
+      command: "echo $HOME"
+    expect:
+      success: true
+
+  - name: "test_pipeline"
+    action: "tool_call"
+    tool: "bash"
+    arguments:
+      command: "echo 'test' | grep 'test'"
+    expect:
+      success: true
+      output_contains: "test"
+
+  - name: "test_redirect"
+    action: "tool_call"
+    tool: "bash"
+    arguments:
+      command: "echo 'redirect test' > /tmp/redirect_output.txt && cat /tmp/redirect_output.txt"
+    expect:
+      success: true
+      output_contains: "redirect test"

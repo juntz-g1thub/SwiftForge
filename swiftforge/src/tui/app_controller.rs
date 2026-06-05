@@ -363,6 +363,7 @@ impl AppController {
     }
 
     fn spawn_agent_task(&mut self, msg: String) {
+        debug!("[app_controller]", "spawn_agent_task START, msg={}", msg);
         trace!(
             "[app_controller]",
             "SPAWN: spawn_agent_task called, msg_len={}",
@@ -371,6 +372,7 @@ impl AppController {
         let runtime = self.runtime.handle().clone();
 
         let (tx, rx) = mpsc::channel();
+        debug!("[app_controller]", "Created channel, storing rx");
         *self.ui_state.response_receiver.lock().unwrap() = Some(rx);
 
         let provider_name = self
@@ -419,12 +421,14 @@ impl AppController {
                 }
             }
 
+            debug!("[app_controller]", "About to create session");
             // Use session from session_manager, or create temp if not available
             let session = if let Some(ref sm) = session_manager {
                 sm.get_current_session()
                     .await
                     .map(|s| Arc::new(RwLock::new(s)))
                     .unwrap_or_else(|| {
+                        debug!("[app_controller]", "No current session in manager, creating temp");
                         Arc::new(RwLock::new(Session::new(
                             uuid::Uuid::new_v4().to_string(),
                             "temp".to_string(),
@@ -432,14 +436,17 @@ impl AppController {
                         )))
                     })
             } else {
+                debug!("[app_controller]", "No session_manager, creating temp session");
                 Arc::new(RwLock::new(Session::new(
                     uuid::Uuid::new_v4().to_string(),
                     "temp".to_string(),
                     100,
                 )))
             };
+            debug!("[app_controller]", "Session created, calling run_agent_loop");
 
             let result = final_agent.run_agent_loop(session, &msg, 5, Some(tx)).await;
+            debug!("[app_controller]", "run_agent_loop returned, result={:?}", result.is_ok());
 
             match result {
                 Ok(response) => {
@@ -536,6 +543,7 @@ impl AppController {
     }
 
     fn process_agent_response(&mut self) {
+        debug!("[app_controller]", "process_agent_response called");
         let finalized_msg = {
             if let Ok(mut finalized) = self.ui_state.finalized_message.lock() {
                 finalized.take()
@@ -561,6 +569,7 @@ impl AppController {
             let mut chunks = Vec::new();
             if let Ok(receiver) = self.ui_state.response_receiver.lock() {
                 if let Some(ref rx) = *receiver {
+                    debug!("[app_controller]", "Polling rx.try_recv()");
                     while let Ok(result) = rx.try_recv() {
                         match result {
                             Ok(chunk) => {
@@ -576,6 +585,8 @@ impl AppController {
                             }
                         }
                     }
+                } else {
+                    debug!("[app_controller]", "response_receiver is None");
                 }
             }
             chunks

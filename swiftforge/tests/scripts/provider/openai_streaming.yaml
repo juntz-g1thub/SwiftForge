@@ -1,0 +1,36 @@
+name: "OpenAI Provider Streaming Test"
+description: "测试 OpenAI Provider 的流式响应功能"
+version: "1.0"
+tags: ["provider", "openai", "streaming"]
+
+config:
+  provider:
+    type: "openai"
+    api_key: "${OPENAI_API_KEY}"
+    model: "gpt-4o"
+    temperature: 0.0
+    
+  agent:
+    name: "test-agent"
+    role: "Executor"
+    tools: []
+    
+  environment:
+    timeout_ms: 30000
+
+steps:
+  - name: "streaming_chat"
+    action: "chat"
+    input:
+      messages:
+        - role: "user"
+          content: "Count from 1 to 3, one number per response. Just say: 1, 2, 3"
+    expect:
+      response_success: true
+      response_time_ms: 20000
+
+  - name: "verify_response"
+    action: "assert"
+    conditions:
+      - "last_response.success == true"
+      - "len(last_response.content) > 0"

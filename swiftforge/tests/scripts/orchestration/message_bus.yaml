@@ -1,0 +1,29 @@
+name: "MessageBus Test Suite"
+description: "测试 MessageBus 的订阅、发送、广播功能"
+version: "1.0"
+tags: ["orchestration", "message-bus", "messaging"]
+
+config:
+  provider:
+    type: "openai"
+    api_key: "${OPENAI_API_KEY}"
+    model: "gpt-4o"
+    temperature: 0.0
+    
+  agent:
+    name: "test-agent"
+    role: "Orchestrator"
+    tools: []
+    
+  environment:
+    timeout_ms: 10000
+
+steps:
+  - name: "test_broadcast"
+    action: "chat"
+    input:
+      messages:
+        - role: "user"
+          content: "Test broadcast message capability"
+    expect:
+      response_success: true

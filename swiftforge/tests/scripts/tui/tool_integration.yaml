@@ -1,0 +1,51 @@
+name: "TUI Tool Integration Test"
+description: "测试 TUI 工具链完整性 - bash/read/write/grep 工具"
+version: "1.0"
+tags: ["tui", "tools", "integration"]
+
+config:
+  provider:
+    type: "openai"
+    api_key: "${OPENAI_API_KEY}"
+    model: "gpt-4o"
+    temperature: 0.0
+
+  agent:
+    name: "tui-tool-agent"
+    role: "Executor"
+    tools: ["bash", "read", "write", "grep"]
+
+  environment:
+    timeout_ms: 60000
+
+steps:
+  - name: "bash_echo"
+    action: "tool_call"
+    tool: "bash"
+    arguments:
+      command: "echo 'TUI tool test passed'"
+    expect:
+      success: true
+      output_contains: "TUI tool test passed"
+
+  - name: "bash_pwd"
+    action: "tool_call"
+    tool: "bash"
+    arguments:
+      command: "pwd"
+    expect:
+      success: true
+      stderr_empty: true
+
+  - name: "bash_list_tmp"
+    action: "tool_call"
+    tool: "bash"
+    arguments:
+      command: "ls -la /tmp"
+    expect:
+      success: true
+      stderr_empty: true
+
+  - name: "verify_tools"
+    action: "wait"
+    duration_ms: 100

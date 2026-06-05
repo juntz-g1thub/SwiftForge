@@ -1,0 +1,37 @@
+name: "Anthropic Provider Chat Test"
+description: "测试 Anthropic Provider 的聊天功能"
+version: "1.0"
+tags: ["provider", "anthropic", "chat"]
+
+config:
+  provider:
+    type: "anthropic"
+    api_key: "${ANTHROPIC_API_KEY}"
+    model: "claude-3-5-sonnet-20241022"
+    temperature: 0.0
+    
+  agent:
+    name: "test-agent"
+    role: "Executor"
+    tools: []
+    
+  environment:
+    timeout_ms: 30000
+
+steps:
+  - name: "simple_chat"
+    action: "chat"
+    input:
+      messages:
+        - role: "user"
+          content: "Say 'hello' if you can hear me."
+    expect:
+      response_success: true
+      response_contains: "hello"
+      response_time_ms: 15000
+
+  - name: "verify_response_not_empty"
+    action: "assert"
+    conditions:
+      - "last_response.success == true"
+      - "len(last_response.content) > 0"

@@ -10,6 +10,7 @@ members = [
     "libs/swiftforge-provider-core",
     "libs/swiftforge-providers",
     "swiftforge",
+    "swiftforge/tests/runner",
 ]
 resolver = "2"
 

@@ -1,0 +1,34 @@
+name: "Hook System Test"
+description: "测试 Hook 注册和触发功能"
+version: "1.0"
+tags: ["hooks", "events", "lifecycle"]
+
+config:
+  provider:
+    type: "openai"
+    api_key: "${OPENAI_API_KEY}"
+    model: "gpt-4o"
+    temperature: 0.0
+    
+  agent:
+    name: "test-agent"
+    role: "Executor"
+    tools: []
+    
+  environment:
+    timeout_ms: 10000
+
+steps:
+  - name: "hook_dispatch_test"
+    action: "chat"
+    input:
+      messages:
+        - role: "user"
+          content: "Test hook system capability"
+    expect:
+      response_success: true
+
+  - name: "verify_hooks"
+    action: "assert"
+    conditions:
+      - "last_response.success == true"

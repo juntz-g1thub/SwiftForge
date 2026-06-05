@@ -1,0 +1,53 @@
+[
+  {
+    "name": "TUI Tool Integration Test",
+    "status": "Passed",
+    "duration_ms": 104,
+    "total_steps": 4,
+    "passed_steps": 4,
+    "failed_steps": 0,
+    "skipped_steps": 0,
+    "step_results": [
+      {
+        "name": "bash_echo",
+        "action": "tool_call",
+        "success": true,
+        "duration_ms": 0,
+        "response": null,
+        "tool_result": "TUI tool test passed\n",
+        "error": null,
+        "conditions": []
+      },
+      {
+        "name": "bash_pwd",
+        "action": "tool_call",
+        "success": true,
+        "duration_ms": 0,
+        "response": null,
+        "tool_result": "/home/zjtti/Coding/SwiftForge/.worktrees/feat-tui-refactor\n",
+        "error": null,
+        "conditions": []
+      },
+      {
+        "name": "bash_list_tmp",
+        "action": "tool_call",
+        "success": true,
+        "duration_ms": 1,
+        "response": null,
+        "tool_result": "total 11240\ndrwxrwxrwt 14 root  root     4096 Jun  5 16:39 .\ndrwxr-xr-x 22 root  root     4096 Jun  5 11:15 ..\n-rw-r--r--  1 zjtti zjtti 4484680 Jun  5 11:15 .5ff737f690ffdbe7-00000000.so\n-rw-r--r--  1 zjtti zjtti 4484680 Jun  5 11:15 .5ff737f7375fd3ad-00000000.so\ndrwxrwxrwt  2 root  root     4096 Jun  5 11:15 .ICE-unix\ndrwxrwxrwx  2 root  root       60 Jun  5 11:15 .X11-unix\ndrwxrwxrwt  2 root  root     4096 Jun  5 11:15 .XIM-unix\ndrwxrwxrwt  2 root  root     4096 Jun  5 11:15 .font-unix\n-rw-r--r--  1 zjtti zjtti  249530 Jun  5 16:41 oh-my-opencode.log\ndrwxr-xr-x  2 zjtti zjtti    4096 Jun  5 11:16 proc-macro-srv465-0\ndrwxr-xr-x  2 zjtti zjtti    4096 Jun  5 11:16 proc-macro-srv485-0\n-rw-r--r--  1 zjtti zjtti 2220235 Jun  5 11:15 ripgrep-wasm-0b39774ab9fe912a.wasm\ndrwx------  2 root  root     4096 Jun  5 11:15 snap-private-tmp\ndrwx------  3 root  root     4096 Jun  5 11:20 systemd-private-bf86d7b94517427d91215e9c5fa5ff20-polkit.service-6cGVCP\ndrwx------  3 root  root     4096 Jun  5 11:15 systemd-private-bf86d7b94517427d91215e9c5fa5ff20-systemd-logind.service-LloYKP\ndrwx------  3 root  root     4096 Jun  5 11:15 systemd-private-bf86d7b94517427d91215e9c5fa5ff20-systemd-resolved.service-MoJRvJ\ndrwx------  3 root  root     4096 Jun  5 11:15 systemd-private-bf86d7b94517427d91215e9c5fa5ff20-systemd-timesyncd.service-gXLTZ5\ndrwx------  3 root  root     4096 Jun  5 16:35 systemd-private-bf86d7b94517427d91215e9c5fa5ff20-wsl-pro.service-aDTCIf\n-rw-r--r--  1 zjtti zjtti     422 Jun  5 16:38 test.yaml\n-rw-r--r--  1 zjtti zjtti     385 Jun  5 16:38 test2.yaml\n",
+        "error": null,
+        "conditions": []
+      },
+      {
+        "name": "verify_tools",
+        "action": "wait",
+        "success": true,
+        "duration_ms": 100,
+        "response": null,
+        "tool_result": null,
+        "error": null,
+        "conditions": []
+      }
+    ]
+  }
+]

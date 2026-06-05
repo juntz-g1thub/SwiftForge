@@ -1,0 +1,49 @@
+name: "Agent Multi-Turn Conversation Test"
+description: "测试 Agent 多轮对话能力"
+version: "1.0"
+tags: ["agent", "multi-turn", "chat"]
+
+config:
+  provider:
+    type: "openai"
+    api_key: "${OPENAI_API_KEY}"
+    model: "gpt-4o"
+    temperature: 0.0
+    
+  agent:
+    name: "test-agent"
+    role: "Executor"
+    tools: []
+    
+  environment:
+    timeout_ms: 60000
+
+steps:
+  - name: "first_turn"
+    action: "chat"
+    input:
+      messages:
+        - role: "user"
+          content: "Remember my favorite color is blue."
+    expect:
+      response_success: true
+
+  - name: "second_turn"
+    action: "chat"
+    input:
+      messages:
+        - role: "user"
+          content: "What is my favorite color?"
+    expect:
+      response_success: true
+      response_contains: "blue"
+
+  - name: "third_turn"
+    action: "chat"
+    input:
+      messages:
+        - role: "user"
+          content: "Tell me a short joke."
+    expect:
+      response_success: true
+      response_time_ms: 15000

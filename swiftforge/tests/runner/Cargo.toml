@@ -1,0 +1,54 @@
+[package]
+name = "test-runner"
+version = "0.1.0"
+edition = "2021"
+authors = ["SwiftForge"]
+description = "SwiftForge automated test runner with YAML script support"
+
+[dependencies]
+swiftforge = { path = "../.." }
+swiftforge-types = { path = "../../../libs/swiftforge-types" }
+swiftforge-task = { path = "../../../libs/swiftforge-task" }
+swiftforge-tools = { path = "../../../libs/swiftforge-tools" }
+swiftforge-providers = { path = "../../../libs/swiftforge-providers" }
+swiftforge-mcp = { path = "../../../libs/swiftforge-mcp" }
+swiftforge-hooks = { path = "../../../libs/swiftforge-hooks" }
+swiftforge-skill = { path = "../../../libs/swiftforge-skill" }
+swiftforge-log = { path = "../../../libs/swiftforge-log" }
+swiftforge-provider-core = { path = "../../../libs/swiftforge-provider-core" }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+futures = "0.3"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+
+# Error handling
+anyhow = "1"
+thiserror = "1"
+
+# CLI
+clap = { version = "4", features = ["derive", "env"] }
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# File operations
+tempfile = "3"
+dirs = "5"
+
+regex = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+serde-xml-rs = "0.6"
+
+[dev-dependencies]
+mockito = "1"
+wiremock = "0.6"
+
+[[bin]]
+name = "sf-test"
+path = "src/main.rs"

@@ -1,0 +1,47 @@
+name: "Agent Tool Execution Test"
+description: "测试 Agent 执行 bash 工具的能力"
+version: "1.0"
+tags: ["agent", "tool", "bash"]
+
+config:
+  provider:
+    type: "openai"
+    api_key: "${OPENAI_API_KEY}"
+    model: "gpt-4o"
+    temperature: 0.0
+    
+  agent:
+    name: "test-agent"
+    role: "Executor"
+    tools: ["bash"]
+    
+  environment:
+    timeout_ms: 30000
+
+steps:
+  - name: "test_bash_echo"
+    action: "tool_call"
+    tool: "bash"
+    arguments:
+      command: "echo 'hello world'"
+    expect:
+      success: true
+      output_contains: "hello world"
+
+  - name: "test_bash_pwd"
+    action: "tool_call"
+    tool: "bash"
+    arguments:
+      command: "pwd"
+    expect:
+      success: true
+      output_contains: "/"
+
+  - name: "test_bash_ls"
+    action: "tool_call"
+    tool: "bash"
+    arguments:
+      command: "ls -la /tmp"
+    expect:
+      success: true
+      output_contains: "total"

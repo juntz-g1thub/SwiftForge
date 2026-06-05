@@ -261,6 +261,7 @@ impl Agent {
             "[agent]",
             "run_agent_loop started with: {}", initial_message
         );
+        debug!("[agent]", "run_agent_loop: session has messages, calling chat_with_tools_streaming");
         session.write().await.add_message("user", initial_message);
 
         let mut full_response = String::new();
