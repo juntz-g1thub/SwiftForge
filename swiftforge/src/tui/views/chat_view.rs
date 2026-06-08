@@ -124,13 +124,20 @@ impl ChatView {
         let mut lines: Vec<Line> = Vec::new();
 
         for msg in &self.state.messages {
+            let label_style = match msg.role.as_str() {
+                "user" => Style::new().green().bold(),
+                "assistant" => Style::new().cyan().bold(),
+                "system" => Style::new().yellow().bold(),
+                "error" => Style::new().red().bold(),
+                _ => Style::new().cyan().bold(),
+            };
+            let label = Self::format_prefix(&msg.role, &self.state.current_model);
+            lines.push(Line::from(Span::styled(label, label_style)));
+
             // Reasoning block — text-embedded with box-drawing borders
             if let Some(ref reasoning) = msg.reasoning {
                 let width = area.width as usize;
-                let top = format!(
-                    "┌─── DeepSeek Reasoning {}",
-                    "─".repeat(width.saturating_sub(23))
-                );
+                let top = format!("┌─── Reasoning {}", "─".repeat(width.saturating_sub(16)));
                 let bottom = format!("└{}┘", "─".repeat(width.saturating_sub(2)));
                 lines.push(Line::from(Span::styled(top, Style::new().magenta())));
                 for r_line in reasoning.lines() {
@@ -148,34 +155,8 @@ impl ChatView {
                 lines.push(Line::from(Span::styled(bottom, Style::new().magenta())));
             }
 
-            // Role-based rendering
-            match msg.role.as_str() {
-                "user" => {
-                    let prefix = Self::format_prefix(&msg.role, &self.state.current_model);
-                    lines.push(Line::from(Span::styled(
-                        prefix,
-                        Style::new().green().bold(),
-                    )));
-                    lines.push(Line::from(Span::raw(msg.content.clone())));
-                }
-                "system" => {
-                    let prefix = Self::format_prefix(&msg.role, &self.state.current_model);
-                    lines.push(Line::from(Span::styled(
-                        prefix,
-                        Style::new().yellow().bold(),
-                    )));
-                    lines.push(Line::from(Span::raw(msg.content.clone())));
-                }
-                "error" => {
-                    let prefix = Self::format_prefix(&msg.role, &self.state.current_model);
-                    lines.push(Line::from(Span::styled(prefix, Style::new().red().bold())));
-                    lines.push(Line::from(Span::raw(msg.content.clone())));
-                }
-                _ => {
-                    // assistant: no prefix, plain text
-                    lines.push(Line::from(Span::raw(msg.content.clone())));
-                }
-            }
+            // Content output
+            lines.push(Line::from(Span::raw(msg.content.clone())));
         }
 
         if self.state.streaming_state.is_active() {
