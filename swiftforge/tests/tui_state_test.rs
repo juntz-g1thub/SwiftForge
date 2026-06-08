@@ -1,5 +1,6 @@
 use swiftforge::tui::{
-    Action, ChatContext, ChatViewState, ConfigContext, ConfigViewState, StreamingState, ViewState,
+    Action, ChatContext, ChatViewState, ConfigContext, ConfigViewState, MessageBlock,
+    StreamingState, ToolCallBlock, ViewState,
 };
 
 #[test]
@@ -28,10 +29,12 @@ fn test_chat_view_state_add_message() {
     state.add_message("assistant", "Hi there!");
 
     assert_eq!(state.messages.len(), 2);
-    assert_eq!(state.messages[0].0, "user");
-    assert_eq!(state.messages[0].1, "Hello");
-    assert_eq!(state.messages[1].0, "assistant");
-    assert_eq!(state.messages[1].1, "Hi there!");
+    assert_eq!(state.messages[0].role, "user");
+    assert_eq!(state.messages[0].content, "Hello");
+    assert_eq!(state.messages[0].reasoning, None);
+    assert!(state.messages[0].tool_calls.is_empty());
+    assert_eq!(state.messages[1].role, "assistant");
+    assert_eq!(state.messages[1].content, "Hi there!");
 }
 
 #[test]
@@ -150,8 +153,10 @@ fn test_streaming_pipeline_data_flow() {
 
     // Verify final state
     assert_eq!(state.messages.len(), 2);
-    assert_eq!(state.messages[1].0, "assistant");
-    assert_eq!(state.messages[1].1, "Hello world from streaming");
+    assert_eq!(state.messages[1].role, "assistant");
+    assert_eq!(state.messages[1].content, "Hello world from streaming");
+    assert_eq!(state.messages[1].reasoning, None);
+    assert!(state.messages[1].tool_calls.is_empty());
     assert_eq!(state.streaming_state, StreamingState::Completed);
     assert!(!state.streaming_state.is_active());
 }
@@ -170,6 +175,53 @@ fn test_streaming_cancellation() {
     assert_eq!(state.streaming_state, StreamingState::Idle);
     assert!(!state.streaming_state.is_active());
     assert_eq!(state.messages.len(), 1); // Only user message, no assistant
+}
+
+#[test]
+fn test_add_structured_message_with_reasoning() {
+    let mut state = ChatViewState::new("deepseek", "deepseek-reasoner");
+
+    let reasoning = "Let me think about this step by step...".to_string();
+    let tool = ToolCallBlock {
+        name: "get_weather".to_string(),
+        arguments: "{\"location\": \"SF\"}".to_string(),
+    };
+
+    state.add_structured_message(
+        "assistant",
+        "The weather in SF is sunny.",
+        Some(reasoning.clone()),
+        vec![tool],
+    );
+
+    assert_eq!(state.messages.len(), 1);
+    assert_eq!(state.messages[0].role, "assistant");
+    assert_eq!(state.messages[0].content, "The weather in SF is sunny.");
+    assert_eq!(
+        state.messages[0].reasoning,
+        Some("Let me think about this step by step...".to_string())
+    );
+    assert_eq!(state.messages[0].tool_calls.len(), 1);
+    assert_eq!(state.messages[0].tool_calls[0].name, "get_weather");
+}
+
+#[test]
+fn test_add_structured_message_no_reasoning() {
+    let mut state = ChatViewState::new("openai", "gpt-4o");
+
+    state.add_structured_message("assistant", "Simple reply", None, vec![]);
+
+    assert_eq!(state.messages.len(), 1);
+    assert_eq!(state.messages[0].role, "assistant");
+    assert_eq!(state.messages[0].content, "Simple reply");
+    assert_eq!(state.messages[0].reasoning, None);
+    assert!(state.messages[0].tool_calls.is_empty());
+}
+
+#[test]
+fn test_message_block_default_status() {
+    let block = MessageBlock::new("user", "hello");
+    assert_eq!(block.status, StreamingState::Completed);
 }
 
 #[test]

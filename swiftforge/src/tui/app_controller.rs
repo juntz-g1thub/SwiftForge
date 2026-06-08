@@ -11,7 +11,7 @@ use swiftforge_log::{debug, info, trace, warn};
 use tokio::runtime::Builder;
 use tokio::sync::RwLock;
 
-use crate::core::SessionManager;
+use crate::core::{AgentResponse, SessionManager};
 use crate::tui::config::ConfigManager;
 use swiftforge_mcp::{McpConnectionPool, McpToolLoader};
 // Providers are initialized in the `initializer` module
@@ -295,6 +295,7 @@ impl AppController {
 
         let streaming_text = Arc::clone(&self.ui_state.streaming_text);
         let finalized_message = Arc::clone(&self.ui_state.finalized_message);
+        let finalized_reasoning = Arc::clone(&self.ui_state.finalized_reasoning);
         let session_manager = self.session_manager.clone();
 
         runtime.spawn(async move {
@@ -362,10 +363,15 @@ impl AppController {
             debug!("[app_controller]", "run_agent_loop returned, result={:?}", result.is_ok());
 
             match result {
-                Ok(response) => {
-                    if !response.is_empty() {
+                Ok(agent_resp) => {
+                    if !agent_resp.content.is_empty() {
                         if let Ok(mut finalized) = finalized_message.lock() {
-                            *finalized = Some(("assistant".to_string(), response));
+                            *finalized = Some(("assistant".to_string(), agent_resp.content));
+                        }
+                    }
+                    if let Some(reasoning) = agent_resp.reasoning {
+                        if let Ok(mut fr) = finalized_reasoning.lock() {
+                            *fr = Some(reasoning);
                         }
                     }
                 }
@@ -466,6 +472,14 @@ impl AppController {
             }
         };
 
+        let finalized_reasoning = {
+            if let Ok(mut fr) = self.ui_state.finalized_reasoning.lock() {
+                fr.take()
+            } else {
+                None
+            }
+        };
+
         let mut channel_disconnected = false;
         {
             if let Ok(receiver) = self.ui_state.response_receiver.lock() {
@@ -536,7 +550,16 @@ impl AppController {
                     role,
                     content.len()
                 );
-                    chat_view.state.add_message(&role, content);
+
+                // Check if we have tool_calls to pass (currently none — placeholder for future)
+                let tool_calls: Vec<crate::tui::state::ToolCallBlock> = Vec::new();
+
+                chat_view.state.add_structured_message(
+                    role,
+                    content,
+                    finalized_reasoning,
+                    tool_calls,
+                );
                 chat_view.state.streaming_state = StreamingState::Completed;
             } else if let Some(text) = streaming_fallback {
                 if !text.is_empty() {

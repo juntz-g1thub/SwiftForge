@@ -25,6 +25,7 @@ pub struct UIState {
     pub response_receiver: Arc<Mutex<Option<mpsc::Receiver<Result<String, anyhow::Error>>>>>,
     pub agent_command_tx: Arc<Mutex<Option<mpsc::Sender<AgentCommand>>>>,
     pub finalized_message: Arc<Mutex<Option<(String, String)>>>,
+    pub finalized_reasoning: Arc<Mutex<Option<String>>>,
 }
 
 impl UIState {
@@ -34,6 +35,7 @@ impl UIState {
             response_receiver: Arc::new(Mutex::new(None)),
             agent_command_tx: Arc::new(Mutex::new(None)),
             finalized_message: Arc::new(Mutex::new(None)),
+            finalized_reasoning: Arc::new(Mutex::new(None)),
         }
     }
 

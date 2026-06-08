@@ -14,6 +14,12 @@ use swiftforge_types::{
 };
 use tokio::sync::RwLock;
 
+#[derive(Debug, Clone)]
+pub struct AgentResponse {
+    pub content: String,
+    pub reasoning: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentConfig {
     pub name: String,
@@ -256,7 +262,7 @@ impl Agent {
         initial_message: &str,
         max_iterations: usize,
         stream_ui: Option<std::sync::mpsc::Sender<Result<String>>>,
-    ) -> Result<String> {
+    ) -> Result<AgentResponse> {
         info!(
             "[agent]",
             "run_agent_loop started with: {}", initial_message
@@ -266,6 +272,7 @@ impl Agent {
 
         let mut full_response = String::new();
         let mut tool_summary = Vec::new();
+        let mut final_reasoning: Option<String> = None;
 
         for i in 0..max_iterations {
             info!("[agent]", "Agent loop iteration {}", i + 1);
@@ -289,6 +296,11 @@ impl Agent {
             let response = self
                 .chat_with_tools_streaming(messages.clone(), on_chunk)
                 .await?;
+
+            // Capture reasoning from this iteration (last non-empty reasoning wins)
+            if response.reasoning_content.is_some() {
+                final_reasoning = response.reasoning_content.clone();
+            }
 
             info!(
                 "[agent]",
@@ -399,7 +411,10 @@ impl Agent {
             );
         }
 
-        Ok(full_response)
+        Ok(AgentResponse {
+            content: full_response,
+            reasoning: final_reasoning,
+        })
     }
 
     pub async fn list_models(&self) -> Result<Vec<String>> {

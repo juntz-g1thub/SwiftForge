@@ -7,8 +7,8 @@ mod views;
 
 pub use config::{AppConfig, ConfigManager, ProviderSettings};
 pub use state::{
-    Action, AppContext, ChatContext, ChatViewState, ConfigContext, ConfigViewState, StreamingState,
-    UIState, ViewState, ViewStateKind,
+    Action, AppContext, ChatContext, ChatViewState, ConfigContext, ConfigViewState, MessageBlock,
+    StreamingState, ToolCallBlock, UIState, ViewState, ViewStateKind,
 };
 pub use views::{ChatView, ConfigView, View};
 

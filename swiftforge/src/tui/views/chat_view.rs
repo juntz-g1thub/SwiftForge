@@ -51,6 +51,13 @@ impl ChatView {
         s.len()
     }
 
+    fn format_prefix(role: &str, model: &str) -> String {
+        match role {
+            "user" => format!("[{}]: ", role),
+            _ => format!("[{} {}]: ", role, model),
+        }
+    }
+
     fn remove_char_before_cursor(input: &mut String, cursor_pos: &mut usize) {
         if *cursor_pos == 0 || input.is_empty() {
             return;
@@ -117,29 +124,65 @@ impl ChatView {
         let mut lines: Vec<Line> = Vec::new();
 
         for msg in &self.state.messages {
-            let (role, content) = msg;
-            let role_style = match role.as_str() {
-                "user" => Style::new().green().bold(),
-                "assistant" => Style::new().cyan().bold(),
-                "system" => Style::new().yellow().bold(),
-                "error" => Style::new().red().bold(),
-                _ => Style::new().white(),
-            };
+            // Reasoning block — text-embedded with box-drawing borders
+            if let Some(ref reasoning) = msg.reasoning {
+                let width = area.width as usize;
+                let top = format!(
+                    "┌─── DeepSeek Reasoning {}",
+                    "─".repeat(width.saturating_sub(23))
+                );
+                let bottom = format!("└{}┘", "─".repeat(width.saturating_sub(2)));
+                lines.push(Line::from(Span::styled(top, Style::new().magenta())));
+                for r_line in reasoning.lines() {
+                    let inner = if r_line.len() + 4 > width {
+                        format!(" {}...│", &r_line[..width.saturating_sub(7)])
+                    } else {
+                        let pad = " ".repeat(width.saturating_sub(r_line.len() + 3));
+                        format!(" {}{} │", r_line, pad)
+                    };
+                    lines.push(Line::from(Span::styled(
+                        format!("│{}", inner),
+                        Style::new().magenta(),
+                    )));
+                }
+                lines.push(Line::from(Span::styled(bottom, Style::new().magenta())));
+            }
 
-            let role_display = format!("[{} {}]", role, self.state.current_model);
-            lines.push(Line::from(Span::styled(
-                format!("{}: ", role_display),
-                role_style,
-            )));
-
-            lines.push(Line::from(Span::raw(content.clone())));
+            // Role-based rendering
+            match msg.role.as_str() {
+                "user" => {
+                    let prefix = Self::format_prefix(&msg.role, &self.state.current_model);
+                    lines.push(Line::from(Span::styled(
+                        prefix,
+                        Style::new().green().bold(),
+                    )));
+                    lines.push(Line::from(Span::raw(msg.content.clone())));
+                }
+                "system" => {
+                    let prefix = Self::format_prefix(&msg.role, &self.state.current_model);
+                    lines.push(Line::from(Span::styled(
+                        prefix,
+                        Style::new().yellow().bold(),
+                    )));
+                    lines.push(Line::from(Span::raw(msg.content.clone())));
+                }
+                "error" => {
+                    let prefix = Self::format_prefix(&msg.role, &self.state.current_model);
+                    lines.push(Line::from(Span::styled(prefix, Style::new().red().bold())));
+                    lines.push(Line::from(Span::raw(msg.content.clone())));
+                }
+                _ => {
+                    // assistant: no prefix, plain text
+                    lines.push(Line::from(Span::raw(msg.content.clone())));
+                }
+            }
         }
 
         if self.state.streaming_state.is_active() {
             if let Ok(streaming) = ui_state.streaming_text.lock() {
                 if let Some(ref text) = *streaming {
                     lines.push(Line::from(Span::styled(
-                        format!("[assistant {}]: ", self.state.current_model),
+                        Self::format_prefix("assistant", &self.state.current_model),
                         Style::new().cyan().bold(),
                     )));
                     lines.push(Line::from(Span::raw(text.clone())));

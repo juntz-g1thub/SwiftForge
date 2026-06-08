@@ -59,8 +59,50 @@ impl StreamingState {
 }
 
 #[derive(Debug, Clone)]
+pub struct ToolCallBlock {
+    pub name: String,
+    pub arguments: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct MessageBlock {
+    pub role: String,
+    pub reasoning: Option<String>,
+    pub tool_calls: Vec<ToolCallBlock>,
+    pub content: String,
+    pub status: StreamingState,
+}
+
+impl MessageBlock {
+    pub fn new(role: &str, content: &str) -> Self {
+        Self {
+            role: role.to_string(),
+            reasoning: None,
+            tool_calls: Vec::new(),
+            content: content.to_string(),
+            status: StreamingState::Completed,
+        }
+    }
+
+    pub fn with_structured(
+        role: &str,
+        content: &str,
+        reasoning: Option<String>,
+        tool_calls: Vec<ToolCallBlock>,
+    ) -> Self {
+        Self {
+            role: role.to_string(),
+            reasoning,
+            tool_calls,
+            content: content.to_string(),
+            status: StreamingState::Completed,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct ChatViewState {
-    pub messages: Vec<(String, String)>,
+    pub messages: Vec<MessageBlock>,
     pub input: String,
     pub cursor_pos: usize,
     pub scroll_offset: usize,
@@ -87,7 +129,19 @@ impl ChatViewState {
     }
 
     pub fn add_message(&mut self, role: &str, content: &str) {
-        self.messages.push((role.to_string(), content.to_string()));
+        self.messages.push(MessageBlock::new(role, content));
+    }
+
+    pub fn add_structured_message(
+        &mut self,
+        role: &str,
+        content: &str,
+        reasoning: Option<String>,
+        tool_calls: Vec<ToolCallBlock>,
+    ) {
+        self.messages.push(MessageBlock::with_structured(
+            role, content, reasoning, tool_calls,
+        ));
     }
 }
 
