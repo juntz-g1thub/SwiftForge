@@ -40,6 +40,24 @@ impl ViewState {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum StreamingState {
+    Idle,
+    Streaming,
+    Completed,
+    Error(String),
+}
+
+impl StreamingState {
+    pub fn is_active(&self) -> bool {
+        matches!(self, StreamingState::Streaming)
+    }
+
+    pub fn is_terminal(&self) -> bool {
+        matches!(self, StreamingState::Completed | StreamingState::Error(_))
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ChatViewState {
     pub messages: Vec<(String, String)>,
@@ -48,7 +66,7 @@ pub struct ChatViewState {
     pub scroll_offset: usize,
     pub content_height: usize,
     pub scrollbar_state: ratatui::widgets::ScrollbarState,
-    pub is_streaming: bool,
+    pub streaming_state: StreamingState,
     pub current_provider: String,
     pub current_model: String,
 }
@@ -62,7 +80,7 @@ impl ChatViewState {
             scroll_offset: 0,
             content_height: 0,
             scrollbar_state: ratatui::widgets::ScrollbarState::new(0),
-            is_streaming: false,
+            streaming_state: StreamingState::Idle,
             current_provider: provider.to_string(),
             current_model: model.to_string(),
         }

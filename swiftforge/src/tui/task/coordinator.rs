@@ -60,7 +60,7 @@ impl TaskCoordinator {
         task_id
     }
 
-    fn process_event(&mut self, event: CoordinatorEvent) {
+    pub fn process_event(&mut self, event: CoordinatorEvent) {
         match event {
             CoordinatorEvent::TaskEnqueued { task_id, task_type } => {
                 let task_type_clone = task_type.clone();

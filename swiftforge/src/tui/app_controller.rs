@@ -9,21 +9,24 @@ use std::sync::{mpsc, Arc};
 use std::time::Duration;
 use swiftforge_log::{debug, info, trace, warn};
 use tokio::runtime::Builder;
-use tokio::sync::Mutex as TokioMutex;
 use tokio::sync::RwLock;
 
-use crate::core::{Agent, AgentConfig, AgentRole, SessionManager};
+use crate::core::SessionManager;
 use crate::tui::config::ConfigManager;
 use swiftforge_mcp::{McpConnectionPool, McpToolLoader};
-use swiftforge_provider_core::ProviderRegistry;
-use swiftforge_providers::{
-    AnthropicProvider, CustomProvider, DeepSeekProvider, MiniMaxProvider, OllamaProvider,
-    OpenAIProvider,
-};
-use swiftforge_tools::{BashTool, EditTool, GrepTool, ReadTool, WriteTool};
-use swiftforge_types::{Session, ToolRegistry};
+// Providers are initialized in the `initializer` module
+use swiftforge_types::Session;
 
-use crate::tui::{Action, AppContext, ChatView, ConfigView, UIState, View, ViewState};
+use crate::tui::initializer::initialize_components;
+use crate::tui::task::coordinator::TaskCoordinator;
+use crate::tui::task::events::{CoordinatorEvent, TaskType};
+use crate::tui::{
+    Action, AppContext, ChatView, ConfigView, StreamingState, UIState, View, ViewState,
+};
+use swiftforge_providers::{
+    AnthropicProvider, DeepSeekProvider, MiniMaxProvider, OllamaProvider, OpenAIProvider,
+};
+use uuid::Uuid;
 
 pub struct AppController {
     context: AppContext,
@@ -31,6 +34,8 @@ pub struct AppController {
     runtime: tokio::runtime::Runtime,
     current_view: Box<dyn View>,
     should_quit: bool,
+    coordinator: TaskCoordinator,
+    current_task_id: Option<Uuid>,
     #[allow(unused)]
     mcp_pool: Option<Arc<McpConnectionPool>>,
     #[allow(unused)]
@@ -64,133 +69,16 @@ impl AppController {
             }
         }
 
-        let mut tool_registry = ToolRegistry::new();
-        tool_registry.register(BashTool::new());
-        tool_registry.register(ReadTool::new());
-        tool_registry.register(WriteTool::new());
-        tool_registry.register(EditTool::new());
-        tool_registry.register(GrepTool::new());
-        let tool_registry = Arc::new(tool_registry);
+        let components = initialize_components(&runtime.handle())?;
 
-        let config = ConfigManager::new();
-        let provider_name = config.get_provider().to_string();
-        let model_name = config.get_model(&provider_name).to_string();
-        let api_key = config.get_api_key(&provider_name).unwrap_or_default();
-        let base_url = config.get_base_url(&provider_name);
-
-        let _registry = ProviderRegistry::new();
-        let llm_provider: swiftforge_provider_core::DynLLMProvider;
-        let tool_provider: Option<swiftforge_provider_core::DynToolCallingProvider>;
-
-        match provider_name.as_str() {
-            "openai" => {
-                let p = OpenAIProvider::new(api_key, base_url);
-                llm_provider = Arc::new(p.clone());
-                tool_provider = Some(Arc::new(p));
-            }
-            "anthropic" => {
-                let p = AnthropicProvider::new(api_key, base_url);
-                llm_provider = Arc::new(p.clone());
-                tool_provider = Some(Arc::new(p));
-            }
-            "deepseek" => {
-                let p = DeepSeekProvider::new(api_key, base_url, Some(model_name.clone()));
-                llm_provider = Arc::new(p.clone());
-                tool_provider = Some(Arc::new(p));
-            }
-            "ollama" => {
-                let p = OllamaProvider::new(base_url, Some(model_name.clone()));
-                llm_provider = Arc::new(p.clone());
-                tool_provider = Some(Arc::new(p));
-            }
-            "minimax" => {
-                let p = MiniMaxProvider::new(api_key, base_url, Some(model_name.clone()));
-                llm_provider = Arc::new(p.clone());
-                tool_provider = Some(Arc::new(p));
-            }
-            "custom" => {
-                let p = CustomProvider::new(
-                    "custom".to_string(),
-                    api_key,
-                    base_url.unwrap_or_default(),
-                    model_name.clone(),
-                );
-                llm_provider = Arc::new(p.clone());
-                tool_provider = Some(Arc::new(p));
-            }
-            _ => {
-                let p = DeepSeekProvider::new(api_key, base_url, Some(model_name.clone()));
-                llm_provider = Arc::new(p.clone());
-                tool_provider = Some(Arc::new(p));
-            }
-        };
-
-        let agent_config = AgentConfig {
-            name: "tui-agent".to_string(),
-            role: AgentRole::Executor,
-            model: Some(model_name),
-            temperature: 0.7,
-        };
-        let agent = Agent::new(agent_config, llm_provider)
-            .with_tool_provider(tool_provider)
-            .with_tool_registry(Arc::clone(&tool_registry));
-
-        let mcp_pool = Arc::new(McpConnectionPool::new());
-        let mcp_loader = Arc::new(McpToolLoader::new(
-            Arc::clone(&mcp_pool),
-            Arc::clone(&tool_registry),
-        ));
-
-        let runtime_handle = runtime.handle().clone();
-        let config = ConfigManager::new();
-        if let Some(mcp_url) = config.get_mcp_url() {
-            let pool = Arc::clone(&mcp_pool);
-            let loader = Arc::clone(&mcp_loader);
-
-            runtime_handle.spawn(async move {
-                if let Err(e) = pool.add_server("mcp", &mcp_url).await {
-                    warn!("[mcp]", "Failed to add server: {}", e);
-                    return;
-                }
-
-                info!("[mcp]", "Starting background connection to 'mcp'");
-
-                if let Err(e) = pool.connect("mcp").await {
-                    warn!("[mcp]", "Failed to connect to 'mcp': {}", e);
-                    return;
-                }
-                info!("[mcp]", "Connected to MCP server: mcp");
-
-                if let Err(e) = pool
-                    .initialize("mcp", "ragent", env!("CARGO_PKG_VERSION"))
-                    .await
-                {
-                    warn!("[mcp]", "Failed to initialize 'mcp': {}", e);
-                    return;
-                }
-
-                match loader.load_tools("mcp").await {
-                    Ok(count) => {
-                        info!("[mcp]", "Loaded {} tools from 'mcp'", count);
-                    }
-                    Err(e) => {
-                        warn!("[mcp]", "Failed to load tools from 'mcp': {}", e);
-                    }
-                }
-            });
-        }
-
-        let context = AppContext::new(agent, config, Arc::clone(&tool_registry));
+        let context = AppContext::new(components.agent.clone(), config, Arc::clone(&components.tool_registry));
         let ui_state = UIState::new();
 
-        let provider = context.config.lock().unwrap().get_provider().to_string();
-        let model = context
-            .config
-            .lock()
-            .unwrap()
-            .get_model(&provider)
-            .to_string();
+        let provider = components.provider_name.clone();
+        let model = components.model_name.clone();
         let current_view: Box<dyn View> = Box::new(ChatView::new(&provider, &model));
+
+        let coordinator = TaskCoordinator::new();
 
         Ok(Self {
             context,
@@ -198,8 +86,10 @@ impl AppController {
             runtime,
             current_view,
             should_quit: false,
-            mcp_pool: Some(mcp_pool),
-            mcp_loader: Some(mcp_loader),
+            coordinator,
+            current_task_id: None,
+            mcp_pool: Some(components.mcp_pool),
+            mcp_loader: Some(components.mcp_loader),
             session_manager,
         })
     }
@@ -214,6 +104,13 @@ impl AppController {
         info!("[app_controller]", "Application started");
 
         loop {
+            // Drive the current_thread runtime to make progress on spawned agent tasks
+            self.runtime.block_on(async {
+                tokio::task::yield_now().await;
+            });
+
+            self.process_agent_response();
+
             trace!("[app_controller]", "loop: drawing");
             terminal.draw(|f| {
                 self.current_view
@@ -233,8 +130,6 @@ impl AppController {
                     }
                 }
             }
-
-            self.process_agent_response();
         }
 
         execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
@@ -250,7 +145,7 @@ impl AppController {
             Action::SendMessage(msg) => {
                 if let Some(chat_view) = self.get_chat_view_mut() {
                     chat_view.state.add_message("user", &msg);
-                    chat_view.state.is_streaming = true;
+                    chat_view.state.streaming_state = StreamingState::Streaming;
                 }
                 self.spawn_agent_task(msg);
             }
@@ -290,7 +185,7 @@ impl AppController {
             Action::CancelStreaming => {
                 self.ui_state.clear_streaming();
                 if let Some(chat_view) = self.get_chat_view_mut() {
-                    chat_view.state.is_streaming = false;
+                    chat_view.state.streaming_state = StreamingState::Idle;
                 }
             }
             Action::Quit => {
@@ -351,18 +246,13 @@ impl AppController {
     }
 
     fn get_chat_view_mut(&mut self) -> Option<&mut ChatView> {
-        let ptr = self.current_view.as_mut() as *mut dyn View;
-        if ptr.is_null() {
-            return None;
-        }
-        let chat_ptr = ptr as *mut ChatView;
-        if chat_ptr.is_null() {
-            return None;
-        }
-        unsafe { Some(&mut *chat_ptr) }
+        let any_ref: &mut dyn std::any::Any = &mut *self.current_view;
+        any_ref.downcast_mut::<ChatView>()
     }
 
     fn spawn_agent_task(&mut self, msg: String) {
+        let task_id = self.coordinator.enqueue(TaskType::UserMessage { priority: 100 });
+        self.current_task_id = Some(task_id);
         debug!("[app_controller]", "spawn_agent_task START, msg={}", msg);
         trace!(
             "[app_controller]",
@@ -421,8 +311,31 @@ impl AppController {
                 }
             }
 
+            let (agent_tx, agent_rx) = mpsc::channel::<Result<String>>();
+            let streaming_text_clone = Arc::clone(&streaming_text);
+            let tx_for_ui = tx.clone();
+
+            std::thread::spawn(move || {
+                debug!("[app_controller]", "thread: Background thread started");
+                while let Ok(result) = agent_rx.recv() {
+                    debug!("[app_controller]", "thread: Received chunk from agent");
+                    if let Ok(text) = &result {
+                        debug!("[app_controller]", "thread: Chunk text: {}", text.chars().take(50).collect::<String>());
+                        if let Ok(mut s) = streaming_text_clone.lock() {
+                            if let Some(ref mut content) = *s {
+                                content.push_str(text);
+                            } else {
+                                *s = Some(text.clone());
+                            }
+                        }
+                    }
+                    let _ = tx_for_ui.send(result);
+                    debug!("[app_controller]", "thread: Forwarded to UI");
+                }
+                debug!("[app_controller]", "thread: Channel closed, thread ending");
+            });
+
             debug!("[app_controller]", "About to create session");
-            // Use session from session_manager, or create temp if not available
             let session = if let Some(ref sm) = session_manager {
                 sm.get_current_session()
                     .await
@@ -445,7 +358,7 @@ impl AppController {
             };
             debug!("[app_controller]", "Session created, calling run_agent_loop");
 
-            let result = final_agent.run_agent_loop(session, &msg, 5, Some(tx)).await;
+            let result = final_agent.run_agent_loop(session, &msg, 5, Some(agent_tx)).await;
             debug!("[app_controller]", "run_agent_loop returned, result={:?}", result.is_ok());
 
             match result {
@@ -544,6 +457,7 @@ impl AppController {
 
     fn process_agent_response(&mut self) {
         debug!("[app_controller]", "process_agent_response called");
+
         let finalized_msg = {
             if let Ok(mut finalized) = self.ui_state.finalized_message.lock() {
                 finalized.take()
@@ -552,36 +466,30 @@ impl AppController {
             }
         };
 
-        if let Some((role, content)) = finalized_msg {
-            debug!(
-                "[app_controller]",
-                "FINALIZED: adding to messages, role={}, content_len={}",
-                role,
-                content.len()
-            );
-            if let Some(chat_view) = self.get_chat_view_mut() {
-                chat_view.state.add_message(&role, &content);
-                chat_view.state.is_streaming = false;
-            }
-        }
-
-        let streaming_chunks = {
-            let mut chunks = Vec::new();
+        let mut channel_disconnected = false;
+        {
             if let Ok(receiver) = self.ui_state.response_receiver.lock() {
                 if let Some(ref rx) = *receiver {
                     debug!("[app_controller]", "Polling rx.try_recv()");
-                    while let Ok(result) = rx.try_recv() {
-                        match result {
-                            Ok(chunk) => {
+                    loop {
+                        match rx.try_recv() {
+                            Ok(Ok(chunk)) => {
                                 debug!(
                                     "[app_controller]",
-                                    "CHUNK: received, chunk_len={}",
+                                    "CHUNK: received, chunk_len={} (forwarded to streaming_text)",
                                     chunk.len()
                                 );
-                                chunks.push(chunk);
                             }
-                            Err(e) => {
-                                debug!("[app_controller]", "CHUNK: channel error: {:?}", e);
+                            Ok(Err(e)) => {
+                                debug!("[app_controller]", "CHUNK: agent error: {:?}", e);
+                            }
+                            Err(mpsc::TryRecvError::Empty) => {
+                                break;
+                            }
+                            Err(mpsc::TryRecvError::Disconnected) => {
+                                debug!("[app_controller]", "CHANNEL: disconnected");
+                                channel_disconnected = true;
+                                break;
                             }
                         }
                     }
@@ -589,22 +497,65 @@ impl AppController {
                     debug!("[app_controller]", "response_receiver is None");
                 }
             }
-            chunks
+        }
+
+        // Extract data from self BEFORE borrowing chat_view (avoids borrow checker conflict)
+        let is_streaming = self
+            .get_chat_view_mut()
+            .map(|cv| cv.state.streaming_state.is_active())
+            .unwrap_or(false);
+
+        // Clean up shared state based on event type
+        let streaming_fallback = if finalized_msg.is_some() {
+            self.ui_state.clear_streaming();
+            if let Ok(mut receiver) = self.ui_state.response_receiver.lock() {
+                *receiver = None;
+            }
+            None
+        } else if channel_disconnected && is_streaming {
+            let text = self
+                .ui_state
+                .streaming_text
+                .lock()
+                .ok()
+                .and_then(|mut s| s.take());
+            if let Ok(mut receiver) = self.ui_state.response_receiver.lock() {
+                *receiver = None;
+            }
+            text
+        } else {
+            None
         };
 
-        if !streaming_chunks.is_empty() {
-            trace!(
-                "[app_controller]",
-                "CHUNKS: adding to messages, chunk_count={}",
-                streaming_chunks.len()
-            );
-            if let Some(chat_view) = self.get_chat_view_mut() {
-                for chunk in streaming_chunks {
-                    chat_view.state.add_message("assistant", &chunk);
+        // Apply state transitions to chat_view (single borrow)
+        if let Some(chat_view) = self.get_chat_view_mut() {
+            if let Some((ref role, ref content)) = finalized_msg {
+                debug!(
+                    "[app_controller]",
+                    "FINALIZED: adding to messages, role={}, content_len={}",
+                    role,
+                    content.len()
+                );
+                    chat_view.state.add_message(&role, content);
+                chat_view.state.streaming_state = StreamingState::Completed;
+            } else if let Some(text) = streaming_fallback {
+                if !text.is_empty() {
+                    debug!(
+                        "[app_controller]",
+                        "DISCONNECTED: migrating streaming_text to messages, len={}",
+                        text.len()
+                    );
+                    chat_view.state.add_message("assistant", &text);
+                    chat_view.state.streaming_state = StreamingState::Completed;
                 }
             }
         }
 
-        let _ = self.ui_state.streaming_text.lock().map(|mut s| s.take());
+        // Notify coordinator on task completion
+        if finalized_msg.is_some() || channel_disconnected {
+            if let Some(task_id) = self.current_task_id.take() {
+                self.coordinator.process_event(CoordinatorEvent::TaskCompleted { task_id });
+            }
+        }
     }
 }

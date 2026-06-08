@@ -7,7 +7,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::tui::state::{Action, AppContext, ChatViewState, UIState};
+use crate::tui::state::{Action, AppContext, ChatViewState, StreamingState, UIState};
 use crate::tui::views::View;
 use ratatui::style::Style;
 
@@ -135,14 +135,16 @@ impl ChatView {
             lines.push(Line::from(Span::raw(content.clone())));
         }
 
-        if let Ok(streaming) = ui_state.streaming_text.lock() {
-            if let Some(ref text) = *streaming {
-                lines.push(Line::from(Span::styled(
-                    format!("[assistant {}]: ", self.state.current_model),
-                    Style::new().cyan().bold(),
-                )));
-                lines.push(Line::from(Span::raw(text.clone())));
-                lines.push(Line::from(Span::styled("▌", Style::new().slow_blink())));
+        if self.state.streaming_state.is_active() {
+            if let Ok(streaming) = ui_state.streaming_text.lock() {
+                if let Some(ref text) = *streaming {
+                    lines.push(Line::from(Span::styled(
+                        format!("[assistant {}]: ", self.state.current_model),
+                        Style::new().cyan().bold(),
+                    )));
+                    lines.push(Line::from(Span::raw(text.clone())));
+                    lines.push(Line::from(Span::styled("▌", Style::new().slow_blink())));
+                }
             }
         }
 
@@ -242,7 +244,7 @@ impl View for ChatView {
     }
 
     fn handle_key(&mut self, key: KeyEvent, _ctx: &AppContext) -> Option<Action> {
-        if self.state.is_streaming {
+        if self.state.streaming_state.is_active() {
             match key.code {
                 KeyCode::Up => {
                     if self.state.scroll_offset > 0 {
@@ -258,7 +260,7 @@ impl View for ChatView {
                     Some(Action::ScrollDown)
                 }
                 KeyCode::Esc => {
-                    self.state.is_streaming = false;
+                    self.state.streaming_state = StreamingState::Idle;
                     Some(Action::CancelStreaming)
                 }
                 _ => None,
@@ -331,7 +333,7 @@ impl View for ChatView {
                         let msg = self.state.input.trim().to_string();
                         self.state.input.clear();
                         self.state.cursor_pos = 0;
-                        self.state.is_streaming = true;
+                        self.state.streaming_state = StreamingState::Streaming;
                         Some(Action::SendMessage(msg))
                     } else {
                         None
