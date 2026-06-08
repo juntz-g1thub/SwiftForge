@@ -7,7 +7,9 @@ use ratatui::{
     Frame,
 };
 
-use crate::tui::state::{Action, AppContext, ChatViewState, StreamingState, UIState};
+use crate::tui::state::{
+    Action, AppContext, BlockType, ChatViewState, StreamingBlock, StreamingState, UIState,
+};
 use crate::tui::views::View;
 use ratatui::style::Style;
 
@@ -134,25 +136,12 @@ impl ChatView {
             let label = Self::format_prefix(&msg.role, &self.state.current_model);
             lines.push(Line::from(Span::styled(label, label_style)));
 
-            // Reasoning block — text-embedded with box-drawing borders
             if let Some(ref reasoning) = msg.reasoning {
-                let width = area.width as usize;
-                let top = format!("┌─── Reasoning {}", "─".repeat(width.saturating_sub(16)));
-                let bottom = format!("└{}┘", "─".repeat(width.saturating_sub(2)));
-                lines.push(Line::from(Span::styled(top, Style::new().magenta())));
-                for r_line in reasoning.lines() {
-                    let inner = if r_line.len() + 4 > width {
-                        format!(" {}...│", &r_line[..width.saturating_sub(7)])
-                    } else {
-                        let pad = " ".repeat(width.saturating_sub(r_line.len() + 3));
-                        format!(" {}{} │", r_line, pad)
-                    };
-                    lines.push(Line::from(Span::styled(
-                        format!("│{}", inner),
-                        Style::new().magenta(),
-                    )));
-                }
-                lines.push(Line::from(Span::styled(bottom, Style::new().magenta())));
+                let mut b =
+                    StreamingBlock::new(BlockType::Reasoning, "Reasoning", area.width as usize);
+                b.append(reasoning);
+                b.set_completed();
+                lines.extend(b.render());
             }
 
             // Content output

@@ -1,3 +1,5 @@
+use ratatui::style::{Style, Stylize};
+
 #[derive(Debug, Clone)]
 pub struct ChatContext {
     pub current_provider: String,
@@ -55,6 +57,89 @@ impl StreamingState {
 
     pub fn is_terminal(&self) -> bool {
         matches!(self, StreamingState::Completed | StreamingState::Error(_))
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BlockType {
+    Reasoning,
+    ToolCall,
+}
+
+#[derive(Debug, Clone)]
+pub struct StreamingBlock {
+    pub block_type: BlockType,
+    pub title: String,
+    pub content: String,
+    pub status: StreamingState,
+    width: usize,
+}
+
+impl StreamingBlock {
+    pub fn new(block_type: BlockType, title: &str, width: usize) -> Self {
+        Self {
+            block_type,
+            title: title.to_string(),
+            content: String::new(),
+            status: StreamingState::Streaming,
+            width,
+        }
+    }
+
+    pub fn append(&mut self, text: &str) {
+        self.content.push_str(text);
+    }
+
+    pub fn set_completed(&mut self) {
+        self.status = StreamingState::Completed;
+    }
+
+    pub fn render(self) -> Vec<ratatui::text::Line<'static>> {
+        use ratatui::text::{Line, Span};
+        let suffix = match self.status {
+            StreamingState::Streaming => "...",
+            StreamingState::Completed => " ✓",
+            StreamingState::Error(_) => " ✗",
+            StreamingState::Idle => "",
+        };
+
+        let border_width = self.width.saturating_sub(2);
+        let title_len = self.title.len() + suffix.len();
+        let dash_count = if border_width > title_len + 4 {
+            border_width.saturating_sub(title_len + 4)
+        } else {
+            0
+        };
+
+        let top = format!("┌─── {}{} {}", self.title, suffix, "─".repeat(dash_count));
+        let bottom = format!("└{}┘", "─".repeat(border_width));
+
+        let style = match self.block_type {
+            BlockType::Reasoning => Style::new().magenta(),
+            BlockType::ToolCall => Style::new().cyan(),
+        };
+
+        let mut lines = Vec::new();
+        lines.push(Line::from(vec![Span::styled(top, style)]));
+
+        let inner_width = border_width.saturating_sub(2);
+        let content_owned = self.content.clone();
+        let content_lines: Vec<String> = content_owned.lines().map(|s| s.to_string()).collect();
+        for r_line in content_lines {
+            let display_line = if r_line.len() > inner_width {
+                format!(" {}...│", &r_line[..inner_width.saturating_sub(5)])
+            } else {
+                let pad = " ".repeat(inner_width.saturating_sub(r_line.len()));
+                format!(" {}{} │", r_line, pad)
+            };
+            lines.push(Line::from(vec![Span::styled(
+                format!("│{}", display_line),
+                style,
+            )]));
+        }
+
+        lines.push(Line::from(vec![Span::styled(bottom, style)]));
+        lines
     }
 }
 
