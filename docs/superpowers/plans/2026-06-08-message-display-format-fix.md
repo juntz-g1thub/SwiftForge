@@ -1,5 +1,10 @@
 # 消息显示格式修正计划 — Phase 1: user 消息移除 model 名
 
+> **状态**: ✅ **已完成**
+> 完整架构文档: [TUI 消息显示架构](../../architecture/2026-06-09-tui-message-display-architecture.md)
+
+> 相关设计文档: [TUI 重构详细设计方案（旧）](../../specs/2026-05-25-tui-message-display-design.md)
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 仅 user 消息的前缀去掉 model 名（`[user gpt-4o]:` → `[user]:`），assistant/system/error 保持 `[role model]:` 不变。

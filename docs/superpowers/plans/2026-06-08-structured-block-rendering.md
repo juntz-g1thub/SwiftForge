@@ -1,10 +1,16 @@
 # 结构化区块渲染实现计划
 
+> **状态**: ✅ **已实现**（方案A — 文本嵌入）
+>
+> 完整架构文档: [TUI 消息显示架构](../../architecture/2026-06-09-tui-message-display-architecture.md)
+
+> 相关设计文档: [TUI 重构详细设计方案（旧）](../../specs/2026-05-25-tui-message-display-design.md)
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 将 assistant 回复渲染为结构化区块：Reasoning（紫框）+ Tool Call（青框）+ Answer（纯文本）
 
-**Architecture:** 三个环节：(1) 定义 `MessageBlock` 数据结构并替换 `Vec<(String, String)>`，(2) 将 reasoning content 从 agent 传递到 UI pipeline，(3) render_messages 调用已有的 `render_reasoning_block` / `render_tool_call_block`
+**实际实现**: 采用方案A — `StreamingBlock::render()` 文本嵌入 Paragraph，而非原设计的独立 `f.render_widget` 方案B。reasoning区块使用ASCII box-drawing字符（`┌─┐│└┘`），Tool Call区块同理可复用。
 
 **Tech Stack:** Rust, ratatui
 
@@ -91,11 +97,11 @@ pub fn add_structured_message(&mut self, role: &str, content: &str, reasoning: O
 }
 ```
 
-- [ ] **Step 1: 在 view_state.rs 添加 ToolCallBlock、MessageBlock 结构体**
-- [ ] **Step 2: 修改 ChatViewState.messages 类型** — `Vec<(String, String)>` → `Vec<MessageBlock>`
-- [ ] **Step 3: 更新 add_message** — 适配新类型，新增 add_structured_message
-- [ ] **Step 4: 导出新类型** — 确认 `mod.rs` 有导出
-- [ ] **Step 5: 验证编译** — `cargo build`
+- [x] **Step 1: 在 view_state.rs 添加 ToolCallBlock、MessageBlock 结构体**
+- [x] **Step 2: 修改 ChatViewState.messages 类型** — `Vec<(String, String)>` → `Vec<MessageBlock>`
+- [x] **Step 3: 更新 add_message** — 适配新类型，新增 add_structured_message
+- [x] **Step 4: 导出新类型** — 确认 `mod.rs` 有导出
+- [x] **Step 5: 验证编译** — `cargo build`
 
 ---
 
@@ -118,7 +124,7 @@ pub async fn run_agent_loop(...) -> Result<AgentResponse> {
     // ... 已有逻辑 ...
     // response.content, reasoning 在 loop 中已捕获
     // 需要在最后一个 chat_with_tools_streaming 调用后获取 reasoning
-    
+
     // 在函数末尾:
     let final_reasoning = /* 从最后一次调用的 reasoning_content 获取 */;
     Ok(AgentResponse {
@@ -130,10 +136,10 @@ pub async fn run_agent_loop(...) -> Result<AgentResponse> {
 
 注意：`run_agent_loop` 内部在每次迭代中调用 `chat_with_tools_streaming`，该方法返回的 `ModelResponse` 已包含 `reasoning_content`。关键是在最后一次迭代（无 tool_calls 时）保存 reasoning。
 
-- [ ] **Step 1: 定义 AgentResponse 结构体**
-- [ ] **Step 2: 修改 `run_agent_loop` 签名和返回值** — 收集最后一次迭代的 reasoning
-- [ ] **Step 3: 更新 `app_controller.rs` 中调用处** — 解构 AgentResponse
-- [ ] **Step 4: 验证编译** — `cargo build`
+- [x] **Step 1: 定义 AgentResponse 结构体**
+- [x] **Step 2: 修改 `run_agent_loop` 签名和返回值** — 收集最后一次迭代的 reasoning
+- [x] **Step 3: 更新 `app_controller.rs` 中调用处** — 解构 AgentResponse
+- [x] **Step 4: 验证编译** — `cargo build`
 
 ---
 
@@ -180,10 +186,10 @@ UIState 新增字段：
 pub finalized_reasoning: Arc<Mutex<Option<String>>>,
 ```
 
-- [ ] **Step 1: UIState 新增 finalized_reasoning 字段**
-- [ ] **Step 2: spawn_agent_task 中解构 AgentResponse、写入 finalized_reasoning**
-- [ ] **Step 3: process_agent_response 中读取 reasoning、调用 add_structured_message**
-- [ ] **Step 4: 验证编译**
+- [x] **Step 1: UIState 新增 finalized_reasoning 字段**
+- [x] **Step 2: spawn_agent_task 中解构 AgentResponse、写入 finalized_reasoning**
+- [x] **Step 3: process_agent_response 中读取 reasoning、调用 add_structured_message**
+- [x] **Step 4: 验证编译**
 
 ---
 
@@ -196,39 +202,25 @@ pub finalized_reasoning: Arc<Mutex<Option<String>>>,
 ```rust
 fn render_messages(&mut self, f: &mut Frame, area: Rect, ui_state: &UIState) {
     let mut lines: Vec<Line> = Vec::new();
-    let mut current_y = area.y();
 
     for msg in &self.state.messages {
-        // Reasoning block
-        if let Some(ref reasoning) = msg.reasoning {
-            let block_height = reasoning.lines().count() as u16 + 2; // 2 for borders
-            let block_area = Rect::new(area.x, current_y, area.width, block_height);
-            self.render_reasoning_block(f, block_area, reasoning, false);
-            current_y += block_height;
-        }
-
-        // Tool call blocks
-        for tc in &msg.tool_calls {
-            let block_height = 5; // fixed height for tool calls
-            let block_area = Rect::new(area.x, current_y, area.width, block_height);
-            // TODO: wire render_tool_call_block when tool calls are populated
-            current_y += block_height;
-        }
-
-        // Content (answer) - no prefix for assistant
-        let role_style = match msg.role.as_str() {
+        let label_style = match msg.role.as_str() {
             "user" => Style::new().green().bold(),
-            "assistant" => Style::new().cyan().bold(),  // still used for user; answer has no prefix
+            "assistant" => Style::new().cyan().bold(),
             "system" => Style::new().yellow().bold(),
             "error" => Style::new().red().bold(),
-            _ => Style::new().white(),
+            _ => Style::new().cyan().bold(),
         };
+        let label = Self::format_prefix(&msg.role, &self.state.current_model);
+        lines.push(Line::from(Span::styled(label, label_style)));
 
-        if msg.role == "user" {
-            let prefix = Self::format_prefix(&msg.role, &self.state.current_model);
-            lines.push(Line::from(Span::styled(prefix, role_style)));
+        if let Some(ref reasoning) = msg.reasoning {
+            let mut b = StreamingBlock::new(BlockType::Reasoning, "Reasoning", area.width as usize);
+            b.append(reasoning);
+            b.set_completed();
+            lines.extend(b.render());
         }
-        // assistant answer: no prefix, plain text
+
         lines.push(Line::from(Span::raw(msg.content.clone())));
     }
 
@@ -236,17 +228,13 @@ fn render_messages(&mut self, f: &mut Frame, area: Rect, ui_state: &UIState) {
 }
 ```
 
-注意：当前 `render_messages` 把所有内容渲染到单一个 `Paragraph`（带滚动）。Reasoning 区块需要被渲染到独立的 `Rect` 区域（用 `f.render_widget`），这跟当前的 Paragraph 滚动机制冲突。要么：
-- A. 把 Reasoning 区块也嵌入到 Paragraph 的纯文本中（模拟边框）
-- B. 把整个消息区域改成按区块布局，放弃统一的 Paragraph
+**已实现方案A**： Reasoning 区块通过 `StreamingBlock::render()` 生成文本嵌入 `Paragraph`，使用 box-drawing 字符。
 
-**建议选 A**（最小改动）：Reasoning 和 Tool Call 区块也用文本方式嵌入到 `lines` 中，带 ASCII 边框，而不是用 `f.render_widget` 渲染独立区块。这样滚动机制不变。
-
-- [ ] **Step 1: 修改 render_messages 对 MessageBlock 类型做 match 渲染**
-- [ ] **Step 2: user 消息保持 `[user]:` 前缀，assistant 的 content 无前缀**
-- [ ] **Step 3: Reasoning 内容用文本区块嵌入** （不用独立的 f.render_widget）
-- [ ] **Step 4: 删除旧的 `format!("{}: ", prefix)` 方式中对 assistant 的硬编码**（format_prefix 中已区分 user/其他）
-- [ ] **Step 5: 验证编译**
+- [x] **Step 1: 修改 render_messages 对 MessageBlock 类型做 match 渲染**
+- [x] **Step 2: user 消息保持 `[user]:` 前缀，assistant 的 content 无前缀**
+- [x] **Step 3: Reasoning 内容用文本区块嵌入** — 通过 `StreamingBlock::render()`
+- [x] **Step 4: 删除旧的 `format!("{}: ", prefix)` 方式中对 assistant 的硬编码**（format_prefix 中已区分 user/其他）
+- [x] **Step 5: 验证编译**
 
 ---
 
@@ -255,18 +243,18 @@ fn render_messages(&mut self, f: &mut Frame, area: Rect, ui_state: &UIState) {
 **Files:**
 - Modify: `swiftforge/tests/tui_state_test.rs`
 
-- [ ] **Step 1: 修改 `test_chat_view_state_add_message`** — 适配 messages 索引由 `(String, String)` 改为 `MessageBlock`
-- [ ] **Step 2: 修改 `test_streaming_pipeline_data_flow`** — 同上
-- [ ] **Step 3: 修改 `test_chat_view_state_scroll_offset`** — 同上
-- [ ] **Step 4: 运行测试** — `cargo test --test tui_state_test --test task_coordinator_test`
+- [x] **Step 1: 修改 `test_chat_view_state_add_message`** — 适配 messages 索引由 `(String, String)` 改为 `MessageBlock`
+- [x] **Step 2: 修改 `test_streaming_pipeline_data_flow`** — 同上
+- [x] **Step 3: 修改 `test_chat_view_state_scroll_offset`** — 同上
+- [x] **Step 4: 运行测试** — `cargo test --test tui_state_test --test task_coordinator_test`
 
 ---
 
 ## 验证检查清单
 
-- [ ] `[user]: hello` 格式不变
-- [ ] assistant 回复中 reasoning 内容显示在紫色文本区块中
-- [ ] assistant 回复中 answer 内容显示为纯文本（无前缀）
-- [ ] streaming 状态保持 `[assistant model]: text▌` 不变
-- [ ] `cargo build --bin swiftforge` 通过
-- [ ] `cargo test --test tui_state_test` 通过
+- [x] `[user]: hello` 格式不变
+- [x] assistant 回复中 reasoning 内容显示在紫色文本区块中
+- [x] assistant 回复中 answer 内容显示为纯文本（无前缀）
+- [x] streaming 状态保持 `[assistant model]: text▌` 不变
+- [x] `cargo build --bin swiftforge` 通过
+- [x] `cargo test --test tui_state_test` 通过

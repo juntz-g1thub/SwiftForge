@@ -2,8 +2,8 @@
 
 > **⚠️ 已过时** — 本文描述的方案B（独立区块渲染）尚未实现
 >
-> **当前实现（方案A）**: 请参考 `docs/architecture/2026-06-09-tui-message-display-architecture.md`（从项目根目录访问）
->
+> **当前实现（方案A）**: 请参考 [TUI 消息显示架构文档](../architecture/2026-06-09-tui-message-display-architecture.md)
+
 > 文档版本: 1.0
 > 生成日期: 2026-05-25
 > 更新日期: 2026-06-09
@@ -201,15 +201,10 @@ pub struct ChatView {
 
 impl View for ChatView {
     fn render(&mut self, f: &mut Frame, area: Rect, ctx: &AppContext, ui_state: &UIState) {
-        // 消息列表区域
         let messages_area = self.get_messages_area(area);
         self.render_messages(f, messages_area);
-
-        // 输入区域
         let input_area = self.get_input_area(area);
         self.render_input(f, input_area);
-
-        // 状态栏
         let status_area = self.get_status_area(area);
         self.render_status(f, status_area);
     }
@@ -220,24 +215,17 @@ impl View for ChatView {
 
 ```rust
 fn render_message(&mut self, msg: &MessageBlock, area: Rect) {
-    // 1. 渲染 Reasoning 区域（如果存在）
     if msg.reasoning.is_some() {
         let reasoning_area = self.get_reasoning_area(area);
         self.render_reasoning_block(reasoning_area, msg);
     }
-
-    // 2. 渲染 Tool Call 区域（如果存在）
     if !msg.tool_calls.is_empty() {
         let tool_area = self.get_tool_area(area);
         self.render_tool_call_block(tool_area, msg);
     }
-
-    // 3. 渲染 Tool Results（如果存在）
     for result in &msg.tool_results {
         self.render_tool_result(result);
     }
-
-    // 4. 渲染 Content 区域
     if !msg.content.is_empty() {
         self.render_content(msg.content);
     }
@@ -276,42 +264,13 @@ fn render_message(&mut self, msg: &MessageBlock, area: Rect) {
 
 ---
 
-## 八、实现步骤
-
-### 阶段 1: 数据结构扩展
-
-1. 创建 `MessageBlock` 结构
-2. 扩展 `ChatViewState` 支持新格式
-3. 修改 Agent 响应解析逻辑
-
-### 阶段 2: 渲染组件实现
-
-1. 实现 `render_reasoning_block()`
-2. 实现 `render_tool_call_block()`
-3. 实现 `render_tool_result_block()`
-4. 调整 `render_content()` 支持新格式
-
-### 阶段 3: 交互功能
-
-1. 实现折叠/展开逻辑
-2. 添加状态动画
-3. 实现暂停功能
-
-### 阶段 4: 整合测试
-
-1. 测试流式输出
-2. 测试折叠/展开
-3. 测试移动端适配
-
----
-
-## 九、实现状态
+## 八、实现状态
 
 > 更新日期: 2026-06-09
 
 ### ⚠️ 已过时 — 请参考新文档
 
-[TUI 消息显示架构文档](../../superpowers/architecture/tui-message-display-architecture.md) 已合并本文内容并反映实际实现状态。
+[TUI 消息显示架构文档](../architecture/2026-06-09-tui-message-display-architecture.md) 已合并本文内容并反映实际实现状态。
 
 ### 实际完成情况
 
@@ -324,20 +283,20 @@ fn render_message(&mut self, msg: &MessageBlock, area: Rect) {
 | render_messages 更新 | `tui/views/chat_view.rs` | ✅ | 调用 StreamingBlock::render() |
 | 类型导出 | `tui/state/mod.rs` + `tui/mod.rs` | ✅ | MessageBlock, StreamingBlock, BlockType |
 
-### 未实现（方案A不支持）
+### 未实现（方案A 不支持）
 
 | 任务 | 状态 | 说明 |
 |------|------|------|
-| render_reasoning_block Block widget | ❌死代码 | 存在但从未被调用 |
+| render_reasoning_block Block widget | ❌ 死代码 | 存在但从未被调用 |
 | render_tool_call_block Block widget | ❌ 死代码 | 存在但从未被调用 |
 | ToolResultBlock | ❌ | 不存在于代码中 |
-| 折叠/展开交互 | ❌ | 方案A不支持 |
+| 折叠/展开交互 | ❌ | 方案A 不支持 |
 | 流式 Reasoning 实时更新 | ❌ | reasoning 在 agent 完成后一次性传入 |
-| 左边框动画 | ❌ | 方案A不支持 |
+| 左边框动画 | ❌ | 方案A 不支持 |
 | emoji 图标 | ❌ | 未实现 |
 | 背景色/配色规范 | ❌ | 纯文本样式 |
 | 移动端适配 | ❌ | - |
 
 ---
 
-*文档状态: 已过时 — 请参考 [TUI 消息显示架构](../../superpowers/architecture/tui-message-display-architecture.md)*
+*文档状态: 已过时 — 请参考 [TUI 消息显示架构](../architecture/2026-06-09-tui-message-display-architecture.md)*

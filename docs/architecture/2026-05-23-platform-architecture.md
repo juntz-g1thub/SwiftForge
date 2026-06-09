@@ -504,12 +504,10 @@ pub trait View {
 pub enum Action {
     SendMessage(String),
     CancelStreaming,
-    AppendMessage(String, String),
     SwitchView(ViewState),
     GoBack,
     ScrollUp,
     ScrollDown,
-    ResetScroll,
     InputChar(char),
     InputBackspace,
     InputDelete,
@@ -523,19 +521,16 @@ pub enum Action {
     SaveModel(String),
     SaveBaseUrl(String),
     FetchModels,
-    SelectModel(String),
     Quit,
 }
 ```
-
-> **Note**: `ToggleDebug`, `ScrollDebugUp`, `ScrollDebugDown` 已移除（由 Log 模块替代）
 
 ### 6.3 ViewState 枚举
 
 ```rust
 pub enum ViewState {
-    Chat(ChatViewState),
-    Config(ConfigViewState),
+    Chat(ChatContext),
+    Config(ConfigContext),
 }
 
 pub enum ViewStateKind {
@@ -544,59 +539,76 @@ pub enum ViewStateKind {
 }
 ```
 
-> **Note**: `Debug(DebugViewState)` 已移除
-
 ### 6.4 视图状态类型
 
+**详细设计文档**: [TUI 消息显示架构](./2026-06-09-tui-message-display-architecture.md)
+
 ```rust
-// 消息块 - 支持深度思考、工具调用、内容分离显示
+// 区块类型
+pub enum BlockType {
+    Reasoning,
+    ToolCall,
+}
+
+// 流式区块 — 可复用的 box-drawing 渲染单元
+pub struct StreamingBlock {
+    pub block_type: BlockType,
+    pub title: String,
+    pub content: String,
+    pub status: StreamingState,
+    width: usize,
+}
+
+//消息区块
 pub struct MessageBlock {
     pub role: String,                              // "user" | "assistant"
-    pub reasoning: Option<String>,                 // 深度思考内容
+    pub reasoning: Option<String>,               // 深度思考内容
     pub tool_calls: Vec<ToolCallBlock>,            // 工具调用列表
-    pub tool_results: Vec<ToolResultBlock>,        // 工具结果列表
     pub content: String,                           // 最终回答
-    pub status: MessageStatus,                     // 状态
+    pub status: StreamingState,                   // Idle | Streaming | Completed | Error
 }
 
+// 工具调用区块
 pub struct ToolCallBlock {
     pub name: String,                              // "bash", "read" 等
-    pub arguments: String,                         // JSON 格式参数
+    pub arguments: String,                        // JSON 格式参数（字符串）
 }
 
-pub struct ToolResultBlock {
-    pub tool_name: String,
-    pub output: String,
-    pub success: bool,
+// 流式状态
+pub enum StreamingState {
+    Idle,
+    Streaming,
+    Completed,
+    Error(String),
 }
 
-pub enum MessageStatus {
-    Streaming,                                     // 流式输出中
-    Completed,                                     // 已完成
-    Error(String),                                 // 错误信息
-}
-
-// 简化的消息格式（保留用于向后兼容）
-pub struct ChatMessage {
-    pub role: String,
+// Agent响应（core/agent.rs）
+pub struct AgentResponse {
     pub content: String,
+    pub reasoning: Option<String>,
 }
 
-pub struct ChatViewState {
-    pub messages: Vec<MessageBlock>,                // 新格式：支持分栏显示
-    pub input: String,
-    pub cursor_pos: usize,
-    pub is_streaming: bool,
-    pub scroll_offset: usize,
-    pub content_height: usize,
-    pub streaming_text: Option<String>,
+// Chat上下文
+pub struct ChatContext {
     pub current_provider: String,
     pub current_model: String,
-    pub reasoning_collapsed: bool,                 // 思考区域是否折叠
+}
+
+// ChatViewState
+pub struct ChatViewState {
+    pub messages: Vec<MessageBlock>,               // 已完成的消息
+    pub input: String,
+    pub cursor_pos: usize,
+    pub scroll_offset: usize,
+    pub content_height: usize,
+    pub scrollbar_state: ratatui::widgets::ScrollbarState,
+    pub streaming_state: StreamingState,
+    pub current_provider: String,
+    pub current_model: String,
 }
 ```
 
-> **实现状态 (T12)**: ChatViewState 已更新使用 Vec<MessageBlock>，reasoning_collapsed 字段已添加。T12 ✅ 完成。
+> **实现状态**: StreamingBlock::render() + MessageBlock + AgentResponse reasoning传递已完成。详见架构文档。
 
 ### 6.5 AppContext 和 UIState
 
@@ -610,13 +622,12 @@ pub struct AppContext {
 
 pub struct UIState {
     pub streaming_text: Arc<Mutex<Option<String>>>,
-    pub debug_messages: Arc<Mutex<Vec<String>>>,  // 由 Log 模块替代
     pub response_receiver: Arc<Mutex<Option<mpsc::Receiver<Result<String, anyhow::Error>>>>>,
-    pub finalized_message: Arc<Mutex<Option<(String, String)>>>,
+    pub agent_command_tx: Arc<Mutex<Option<mpsc::Sender<AgentCommand>>>>,
+    pub finalized_message: Arc<Mutex<Option<(String, String)>>>,  // (role, content)
+    pub finalized_reasoning: Arc<Mutex<Option<String>>>,
 }
 ```
-
-> **Note**: `debug_log_path` 已移除，debug 日志写入 `~/.fastcode/ragent.log`
 
 ---
 
@@ -843,7 +854,8 @@ macro_rules! error { ($($arg:tt)*) => { log!(LogLevel::ERROR, $($arg)*); } }
 | `src/tui/app_controller.rs` | AppController |
 | `src/tui/views/chat_view.rs` | ChatView |
 | `src/tui/views/config_view.rs` | ConfigView |
-| `src/tui/views/debug_view.rs` | **已移除** (由 swiftforge-log 替代) |
+| `src/tui/initializer.rs` | TuiInitializer — 初始化逻辑提取 |
+| `docs/architecture/2026-06-09-tui-message-display-architecture.md` | **TUI 消息显示架构（方案A+方案B）** |
 
 ### Integration
 
