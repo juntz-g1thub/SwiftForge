@@ -111,7 +111,7 @@ impl StreamingBlock {
         } else {
             0
         };
-        let bottom_dash_count = inner_width;
+        let bottom_dash_count = inner_width.saturating_sub(2);
 
         let top = format!("┌─── {} {}┐", title_str, "─".repeat(top_dash_count));
         let bottom = format!("└{}┘", "─".repeat(bottom_dash_count));
@@ -126,17 +126,15 @@ impl StreamingBlock {
 
         let content_owned = self.content.clone();
         let content_lines: Vec<String> = content_owned.lines().map(|s| s.to_string()).collect();
+        let content_max = inner_width.saturating_sub(2);
         for r_line in content_lines {
-            let display_line = if r_line.len() > inner_width {
-                format!("{}...│", &r_line[..inner_width.saturating_sub(5)])
+            let line_content = if r_line.len() > content_max {
+                format!("{}...", &r_line[..content_max.saturating_sub(5)])
             } else {
-                let pad = " ".repeat(inner_width.saturating_sub(r_line.len()));
-                format!("{}{} │", r_line, pad)
+                r_line.to_string()
             };
-            lines.push(Line::from(vec![Span::styled(
-                format!("│{}", display_line),
-                style,
-            )]));
+            let display_line = format!("│{:<width$}│", line_content, width = content_max);
+            lines.push(Line::from(vec![Span::styled(display_line, style)]));
         }
 
         lines.push(Line::from(vec![Span::styled(bottom, style)]));
