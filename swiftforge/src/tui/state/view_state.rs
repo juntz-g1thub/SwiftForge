@@ -106,19 +106,14 @@ impl StreamingBlock {
 
         let inner_width = self.width.saturating_sub(2);
         let title_str = format!("{}{}", self.title, suffix);
-        let top_dash_count = if inner_width > title_str.len() + 4 {
-            inner_width.saturating_sub(title_str.len() + 4)
+        let top_dash_count = if self.width > title_str.len() + 7 {
+            self.width.saturating_sub(title_str.len() + 7)
         } else {
             0
         };
         let bottom_dash_count = inner_width;
 
-        let top = format!(
-            "┌─── {}{} {}┐",
-            self.title,
-            suffix,
-            "─".repeat(top_dash_count)
-        );
+        let top = format!("┌─── {} {}┐", title_str, "─".repeat(top_dash_count));
         let bottom = format!("└{}┘", "─".repeat(bottom_dash_count));
 
         let style = match self.block_type {
